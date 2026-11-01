@@ -338,19 +338,44 @@ function pdfName(f) {
   var s = currentShop();
   return 'pdf/' + f.id + (s ? '--' + s.id + '-' + s.ops.indexOf(currentOp(s)) : '') + '.pdf';
 }
-function updPdf() { var a = $('#m-pdf'); if (a && a.getAttribute('data-f')) a.href = pdfName(FORMS.filter(function (x) { return x.id === a.getAttribute('data-f'); })[0]); }
+var pdfBlob = null, pdfFor = '';
+function prefetchPdf(url) {
+  pdfBlob = null; pdfFor = url;
+  if (!window.fetch) return;
+  fetch(url).then(function (r) { if (!r.ok) throw 0; return r.blob(); }).then(function (b) { if (pdfFor === url) pdfBlob = b; }).catch(function () {});
+}
+function updPdf() {
+  var a = $('#m-pdf'); if (!a || !a.getAttribute('data-f')) return;
+  a.href = pdfName(FORMS.filter(function (x) { return x.id === a.getAttribute('data-f'); })[0]);
+  prefetchPdf(a.getAttribute('href'));
+}
+function canShareFiles() {
+  try { return !!(navigator.share && navigator.canShare && navigator.canShare({ files: [new File(['x'], 'x.pdf', { type: 'application/pdf' })] })); } catch (e) { return false; }
+}
+function sharePdf(f) {
+  var a = $('#m-pdf'), url = a.getAttribute('href');
+  if (!pdfBlob || pdfFor !== url) { location.href = url; return; }
+  var file = new File([pdfBlob], url.split('/').pop(), { type: 'application/pdf' });
+  navigator.share({ files: [file], title: f.title }).catch(function (e) { if (!e || e.name !== 'AbortError') location.href = url; });
+}
 window.__dovForm = function (id) { var f = FORMS.filter(function (x) { return x.id === id; })[0]; doPrint(formHtml(f), f.portrait); };
 
 function printForm(id) {
   var f = FORMS.filter(function (x) { return x.id === id; })[0]; if (!f) return;
   if (isMobile || inApp) {
+    var share = canShareFiles();
     showModal('<h3>🖨 ' + esc(f.title) + '</h3>' + shopPicker() +
-      '<div class="actions"><a class="btn" id="m-pdf" data-f="' + f.id + '" href="' + pdfName(f) + '" target="_blank" rel="noopener">Відкрити PDF для друку</a></div>' +
-      '<p class="sub">PDF відкриється на телефоні. Далі: <b>Поділитися</b> або меню <b>⋮</b> → <b>Друк</b> і оберіть принтер (принтер має бути в тій самій Wi‑Fi мережі).</p>' +
+      (share ? '<div class="actions"><button class="btn" id="m-share">🖨 Друкувати</button></div>' +
+        '<p class="sub">Відкриється меню «Поділитися» → виберіть <b>Друк</b> → оберіть принтер (принтер має бути в тій самій Wi‑Fi мережі).</p>' +
+        '<p><a class="btn ghost" id="m-pdf" data-f="' + f.id + '" href="' + pdfName(f) + '" target="_blank" rel="noopener">Відкрити PDF</a></p>' :
+        '<div class="actions"><a class="btn" id="m-pdf" data-f="' + f.id + '" href="' + pdfName(f) + '" target="_blank" rel="noopener">Відкрити PDF для друку</a></div>' +
+        '<p class="sub">PDF відкриється на телефоні. Далі: <b>Поділитися</b> або меню <b>⋮</b> → <b>Друк</b> і оберіть принтер (принтер має бути в тій самій Wi‑Fi мережі).</p>') +
       (inApp ? '<p class="warn">Ви відкрили довідник усередині Viber/Telegram. Якщо PDF не відкривається, натисніть ⋮ угорі → «Відкрити в браузері» (Chrome або Safari).</p>' :
-        '<p><button class="btn ghost" id="m-print">Друк зі сторінки браузера</button></p>') +
+        (share ? '' : '<p><button class="btn ghost" id="m-print">Друк зі сторінки браузера</button></p>')) +
       '<p><button class="btn ghost" id="m-no">Закрити</button></p>');
     $('#m-no').onclick = hideModal;
+    if (share) $('#m-share').onclick = function () { sharePdf(f); };
+    updPdf();
     if ($('#m-print')) $('#m-print').onclick = function () { hideModal(); doPrint(formHtml(f), f.portrait); };
     return;
   }
