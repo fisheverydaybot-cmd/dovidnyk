@@ -18,7 +18,7 @@ h1{font-size:26px;line-height:1.25;margin:4px 0 2px}h2{font-size:15px;text-trans
 .row{padding:12px 0;border-bottom:1px solid #edf1f3}.row:last-child{border-bottom:0}
 .k{font-size:13px;text-transform:uppercase;letter-spacing:.04em;color:#0b5d7a;font-weight:700;margin-bottom:2px}
 table{border-collapse:collapse;width:100%}td{padding:6px 0;border-bottom:1px solid #edf1f3}td:last-child{text-align:right;font-weight:600}
-.note{font-size:13px;color:#5b6873}.ph{margin:0 0 12px}.ph img{width:100%;height:auto;border-radius:14px;display:block;background:#dde5e9}.ph figcaption{font-size:13px;color:#5b6873;margin-top:4px}.alg{background:#fff4dc;border-radius:10px;padding:10px 12px}
+.note{font-size:13px;color:#5b6873}.ph{margin:12px 0}.ph img{width:100%;height:auto;border-radius:14px;display:block;background:#dde5e9}.ph figcaption{font-size:13px;color:#5b6873;margin-top:4px}.alg{background:#fff4dc;border-radius:10px;padding:10px 12px}
 ul.list{list-style:none;padding:0}ul.list a{display:block;background:#fff;border:1px solid #d7dee3;border-radius:12px;padding:13px 14px;margin-bottom:8px;color:#1d2730;text-decoration:none;font-weight:600}
 ul.list small{display:block;font-weight:400;color:#5b6873}
 .sheet{display:grid;grid-template-columns:repeat(4,1fr);gap:4mm}.lbl{border:1px dashed #999;border-radius:6px;padding:3mm;text-align:center;break-inside:avoid;background:#fff}
@@ -66,14 +66,9 @@ for p in P:
     fi = FISH[p['fk']]
     same = [o for o in P if o['fk'] == p['fk'] and o is not p]
     more = ('<ul class="list">' + ''.join(f'<li><a href="../{o["id"]}/">{e(o["name"])}</a></li>' for o in same) + '</ul>') if same else ''
-    # спершу сировина (фото і дані про рибу) — це перше, що бачить покупець після сканування QR
+    # порядок: продукт → про рибу (опис) → фото сировини (фото внизу, щоб не плутали з готовим продуктом)
     body = (f'<h1>{e(p["name"])}</h1><p class="lat">{e(fi["name"])} · {e(fi["latin"])}</p>'
-            '<h2>Сировина</h2>' + photo(p['fk']) + '<div class="card">' +
-            row('Риба', f'<div>{e(fi["name"])} <i>({e(fi["latin"])})</i></div>') +
-            row('Родина', f'<div>{e(fi["family"])}</div>') +
-            row('Де ловлять', f'<div>{e(fi["habitat"])}</div>') +
-            row('Чим корисна', f'<div>{e(fi["value"])}</div>') +
-            '</div><h2>Про продукт</h2><div class="card">' +
+            '<h2>Про продукт</h2><div class="card">' +
             row('Що це', f'<div>{e(p["category"])}</div>') +
             row('Як виготовлено', f'<div>{e(p["method"])}</div>') +
             (row('Гаряче чи холодне копчення?', SMOKE[p['smoke']]) if p.get('smoke') else '') +
@@ -81,7 +76,12 @@ for p in P:
             row('Харчова цінність', nutr_table(p)) +
             row('Алергени', '<div class="alg">Містить <b>рибу</b>.</div>') +
             row('Як подавати', f'<div>{e(p["serve"])}</div>') +
-            '</div>' + (f'<h2>Що ще ми робимо з цієї риби</h2>{more}' if more else '') +
+            f'</div><h2>Про рибу</h2><div class="card">' +
+            row('Риба', f'<div>{e(fi["name"])} <i>({e(fi["latin"])})</i></div>') +
+            row('Родина', f'<div>{e(fi["family"])}</div>') +
+            row('Де ловлять', f'<div>{e(fi["habitat"])}</div>') +
+            row('Чим корисна', f'<div>{e(fi["value"])}</div>') +
+            '</div>' + photo(p['fk']) + (f'<h2>Що ще ми робимо з цієї риби</h2>{more}' if more else '') +
             '<p class="note">Виробник, дата виготовлення, номер партії, умови і строк зберігання вказані на етикетці товару.</p>')
     os.makedirs(f'{out}/p/{p["id"]}', exist_ok=True)
     open(f'{out}/p/{p["id"]}/index.html', 'w').write(page(p['name'], body))
