@@ -53,7 +53,7 @@ var FORM_MATCH = [
   ['журнал медоглядів', 'medohlyady'], ['журнал обладнання', 'obladnannya'], ['журнал відвідувачів', 'vidviduvachi']
 ];
 
-var QR_DEFAULT = ['moroz', 'vitryna', 'temperatury', 'priymannya', 'prybyrannya', 'dezrozchyn', 'ruky', 'zdorovya', 'svitlo', 'skarga', 'strok', 'nozhi'];
+var QR_DEFAULT = ['home', 'moroz', 'vitryna', 'temperatury', 'priymannya', 'prybyrannya', 'dezrozchyn', 'ruky', 'zdorovya', 'svitlo', 'skarga', 'strok', 'nozhi'];
 
 // ---------- Утиліти ----------
 function $(s, r) { return (r || document).querySelector(s); }
@@ -229,7 +229,7 @@ function viewForms() {
 function viewHelp() {
   var h = '<a class="back" href="#">← Усі розділи</a><h2>ℹ️ Як користуватися</h2>' + (DATA.intro ? DATA.intro.html : '');
   h += '<h3>Як додати довідник на телефон</h3><ol><li>Відкрийте посилання з групи магазину.</li><li>Android (Chrome): меню ⋮ → «Додати на головний екран».</li><li>iPhone (Safari): кнопка «Поділитися» → «На екран „Додому“».</li></ol>';
-  h += '<h3>QR-наклейки</h3><p>Для старшого продавця: <a href="#qr">аркуш QR-наклейок для друку</a>. Наклейте їх на морозильник, вітрину, біля рукомийника — працівник наводить камеру й одразу бачить відповідь.</p>';
+  h += '<h3>QR-наклейки</h3><p>Для старшого продавця: <a href="#qr">аркуш QR-наклейок для друку</a> і плакат А4 з QR-кодом на головну сторінку довідника. Наклейте їх на морозильник, вітрину, біля рукомийника — працівник наводить камеру й одразу бачить відповідь.</p>';
   main.innerHTML = h;
 }
 
@@ -237,14 +237,17 @@ function viewQR() {
   var saved = store('qr-base');
   var guess = inFrame ? 'https://fisheverydaybot-cmd.github.io/dovidnyk/' : location.href.split('#')[0];
   var base = saved || guess;
-  var sel = (store('qr-sel') || QR_DEFAULT.join(',')).split(',');
+  var sel = (store('qr-sel2') || QR_DEFAULT.join(',')).split(',');
   var h = '<a class="back" href="#yak">← Як користуватися</a><h2>QR-наклейки</h2>' +
     '<label class="full">Адреса сайту довідника<input id="qr-base" type="url" placeholder="https://..." value="' + esc(base) + '"></label>' +
-    '<p class="sub">Позначте питання для наклейок:</p><div class="qsel">' +
+    '<div class="actions"><button class="btn ghost" id="qr-poster">🖨 Плакат А4: QR на головну сторінку</button></div>' +
+    '<p class="sub">Позначте наклейки:</p><div class="qsel">' +
+    '<label><input type="checkbox" value="home"' + (sel.indexOf('home') >= 0 ? ' checked' : '') + '> <b>Головна сторінка довідника (усі відповіді і бланки)</b></label>' +
     ALLQ.map(function (q) { return '<label><input type="checkbox" value="' + q.id + '"' + (sel.indexOf(q.id) >= 0 ? ' checked' : '') + '> ' + esc(q.title) + '</label>'; }).join('') +
     '</div><button class="btn" id="qr-go">Показати аркуш для друку</button><div id="qr-sheet"></div>';
   main.innerHTML = h;
   $('#qr-go').onclick = buildQR;
+  $('#qr-poster').onclick = printPoster;
   if (base) buildQR();
 }
 
@@ -258,16 +261,25 @@ function qrSvg(text) {
 function buildQR() {
   var base = ($('#qr-base').value || '').trim();
   var ids = Array.prototype.map.call(document.querySelectorAll('.qsel input:checked'), function (x) { return x.value; });
-  store('qr-base', base); store('qr-sel', ids.join(','));
+  store('qr-base', base); store('qr-sel2', ids.join(','));
   var out = $('#qr-sheet');
   if (!/^https?:\/\//.test(base)) { out.innerHTML = '<p class="warn">Вкажіть адресу сайту (починається з https://), щоб QR-коди вели на неї.</p>'; return; }
   base = base.split('#')[0];
   var cards = ids.map(function (id) {
+    if (id === 'home') return '<div class="sticker home"><div class="qr">' + qrSvg(base) + '</div><div class="st-t">Довідник НАССР — усі відповіді і бланки</div><div class="st-s">Наведіть камеру телефону · Риба Щодня</div></div>';
     var q = ALLQ.filter(function (x) { return x.id === id; })[0]; if (!q) return '';
     return '<div class="sticker"><div class="qr">' + qrSvg(base + '#q-' + id) + '</div><div class="st-t">' + esc(q.title) + '</div><div class="st-s">Наведіть камеру телефону · Довідник НАССР</div></div>';
   }).join('');
   out.innerHTML = '<div class="actions"><button class="btn" id="qr-print">Друкувати аркуш</button></div><div class="stickers print-area">' + cards + '</div>';
   $('#qr-print').onclick = function () { doPrint(out.querySelector('.stickers').outerHTML, true); };
+}
+
+function printPoster() {
+  var base = ($('#qr-base').value || '').trim();
+  if (!/^https?:\/\//.test(base)) { alert('Вкажіть адресу сайту (починається з https://)'); return; }
+  base = base.split('#')[0]; store('qr-base', base);
+  doPrint('<div class="poster"><div class="p-t">🐟 Довідник НАССР</div><div class="p-s">Риба Щодня</div><div class="p-qr">' + qrSvg(base) + '</div>' +
+    '<div class="p-c">Наведіть камеру телефону на код</div><ul class="p-l"><li>що робити, якщо щось пішло не так</li><li>температури, строки, прибирання, гігієна</li><li>бланки і журнали для друку</li></ul><div class="p-u">' + esc(base) + '</div></div>', true);
 }
 
 function viewSearch(term) {
