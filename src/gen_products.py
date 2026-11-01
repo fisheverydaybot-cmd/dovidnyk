@@ -66,8 +66,14 @@ for p in P:
     fi = FISH[p['fk']]
     same = [o for o in P if o['fk'] == p['fk'] and o is not p]
     more = ('<ul class="list">' + ''.join(f'<li><a href="../{o["id"]}/">{e(o["name"])}</a></li>' for o in same) + '</ul>') if same else ''
+    # спершу сировина (фото і дані про рибу) — це перше, що бачить покупець після сканування QR
     body = (f'<h1>{e(p["name"])}</h1><p class="lat">{e(fi["name"])} · {e(fi["latin"])}</p>'
-            '<h2>Про продукт</h2><div class="card">' +
+            '<h2>Сировина</h2>' + photo(p['fk']) + '<div class="card">' +
+            row('Риба', f'<div>{e(fi["name"])} <i>({e(fi["latin"])})</i></div>') +
+            row('Родина', f'<div>{e(fi["family"])}</div>') +
+            row('Де ловлять', f'<div>{e(fi["habitat"])}</div>') +
+            row('Чим корисна', f'<div>{e(fi["value"])}</div>') +
+            '</div><h2>Про продукт</h2><div class="card">' +
             row('Що це', f'<div>{e(p["category"])}</div>') +
             row('Як виготовлено', f'<div>{e(p["method"])}</div>') +
             (row('Гаряче чи холодне копчення?', SMOKE[p['smoke']]) if p.get('smoke') else '') +
@@ -75,11 +81,6 @@ for p in P:
             row('Харчова цінність', nutr_table(p)) +
             row('Алергени', '<div class="alg">Містить <b>рибу</b>.</div>') +
             row('Як подавати', f'<div>{e(p["serve"])}</div>') +
-            f'</div><h2>Про рибу</h2>' + photo(p['fk']) + '<div class="card">' +
-            row('Риба', f'<div>{e(fi["name"])} <i>({e(fi["latin"])})</i></div>') +
-            row('Родина', f'<div>{e(fi["family"])}</div>') +
-            row('Де ловлять', f'<div>{e(fi["habitat"])}</div>') +
-            row('Чим корисна', f'<div>{e(fi["value"])}</div>') +
             '</div>' + (f'<h2>Що ще ми робимо з цієї риби</h2>{more}' if more else '') +
             '<p class="note">Виробник, дата виготовлення, номер партії, умови і строк зберігання вказані на етикетці товару.</p>')
     os.makedirs(f'{out}/p/{p["id"]}', exist_ok=True)
