@@ -114,7 +114,7 @@ def layout(l, body=17):
     qs = len(mat) * QM
     qx, qy = W - M - qs, H - M - qs + 2
     ops.append(('qr', qx, qy, mat))
-    cap = 'Про рибу'
+    cap = l.get('cap', 'Про рибу')
     ops.append(('text', qx + (qs - tw([(cap, True)], 14)) / 2, qy - 4, 14, [(cap, True)]))
     left = qx - M - 10
     fs = body - 1

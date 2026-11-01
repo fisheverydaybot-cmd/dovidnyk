@@ -74,10 +74,10 @@ for p in P:
             (row('Гаряче чи холодне копчення?', SMOKE[p['smoke']]) if p.get('smoke') else '') +
             row('Склад', f'<div>{e(p["composition"])}</div>') +
             row('Харчова цінність', nutr_table(p)) +
-            row('Алергени', '<div class="alg">Містить <b>рибу</b>' + (' і <b>гірчицю</b>' if 'гірчиц' in p['composition'].lower() else '') + '.</div>') +
+            row('Алергени', '<div class="alg">Містить <b>' + fi.get('allergen', 'рибу') + '</b>' + (' і <b>гірчицю</b>' if 'гірчиц' in p['composition'].lower() else '') + '.</div>') +
             row('Як подавати', f'<div>{e(p["serve"])}</div>') +
-            f'</div><h2>Про рибу</h2><div class="card">' +
-            row('Риба', f'<div>{e(fi["name"])} <i>({e(fi["latin"])})</i></div>') +
+            f'</div><h2>{e(fi.get("about", "Про рибу"))}</h2><div class="card">' +
+            row(fi.get('kind', 'Риба'), f'<div>{e(fi["name"])} <i>({e(fi["latin"])})</i></div>') +
             row('Родина', f'<div>{e(fi["family"])}</div>') +
             row('Де ловлять', f'<div>{e(fi["habitat"])}</div>') +
             row('Чим корисна', f'<div>{e(fi["value"])}</div>') +
