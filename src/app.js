@@ -59,6 +59,9 @@ var QR_DEFAULT = ['home', 'moroz', 'vitryna', 'temperatury', 'priymannya', 'pryb
 function $(s, r) { return (r || document).querySelector(s); }
 function esc(t) { return String(t).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;'); }
 function store(k, v) { try { if (v === undefined) return localStorage.getItem(k); localStorage.setItem(k, v); } catch (e) { return null; } }
+var UA = navigator.userAgent || '';
+var isMobile = /Android|iPhone|iPad|iPod|Mobile/i.test(UA);
+var inApp = /Viber|Telegram|FBAN|FBAV|Instagram|Line\/|; wv\)/i.test(UA);
 var inFrame = (function () { try { return window.self !== window.top; } catch (e) { return true; } })();
 
 function inline(t) {
@@ -331,8 +334,26 @@ function doPrint(html, portrait) {
   }, 50);
 }
 
+function pdfName(f) {
+  var s = currentShop();
+  return 'pdf/' + f.id + (s ? '--' + s.id + '-' + s.ops.indexOf(currentOp(s)) : '') + '.pdf';
+}
+function updPdf() { var a = $('#m-pdf'); if (a && a.getAttribute('data-f')) a.href = pdfName(FORMS.filter(function (x) { return x.id === a.getAttribute('data-f'); })[0]); }
+window.__dovForm = function (id) { var f = FORMS.filter(function (x) { return x.id === id; })[0]; doPrint(formHtml(f), f.portrait); };
+
 function printForm(id) {
   var f = FORMS.filter(function (x) { return x.id === id; })[0]; if (!f) return;
+  if (isMobile || inApp) {
+    showModal('<h3>🖨 ' + esc(f.title) + '</h3>' + shopPicker() +
+      '<div class="actions"><a class="btn" id="m-pdf" data-f="' + f.id + '" href="' + pdfName(f) + '" target="_blank" rel="noopener">Відкрити PDF для друку</a></div>' +
+      '<p class="sub">PDF відкриється на телефоні. Далі: <b>Поділитися</b> або меню <b>⋮</b> → <b>Друк</b> і оберіть принтер (принтер має бути в тій самій Wi‑Fi мережі).</p>' +
+      (inApp ? '<p class="warn">Ви відкрили довідник усередині Viber/Telegram. Якщо PDF не відкривається, натисніть ⋮ угорі → «Відкрити в браузері» (Chrome або Safari).</p>' :
+        '<p><button class="btn ghost" id="m-print">Друк зі сторінки браузера</button></p>') +
+      '<p><button class="btn ghost" id="m-no">Закрити</button></p>');
+    $('#m-no').onclick = hideModal;
+    if ($('#m-print')) $('#m-print').onclick = function () { hideModal(); doPrint(formHtml(f), f.portrait); };
+    return;
+  }
   if (!currentShop()) {
     showModal('<h3>Для якого магазину бланк?</h3>' + shopPicker() + '<div class="actions"><button class="btn" id="m-ok">Друкувати</button> <button class="btn ghost" id="m-no">Без магазину</button></div>');
     $('#m-ok').onclick = function () { hideModal(); doPrint(formHtml(f), f.portrait); };
@@ -364,8 +385,8 @@ document.addEventListener('click', function (e) {
   if (e.target.id === 'modal') hideModal();
 });
 document.addEventListener('change', function (e) {
-  if (e.target.id === 'pick-shop') { store('shop', e.target.value); var box = e.target.closest('.picker'); box.outerHTML = shopPicker(); }
-  if (e.target.id === 'pick-op') { var s = currentShop(); if (s) store('op-' + s.id, e.target.value); }
+  if (e.target.id === 'pick-shop') { store('shop', e.target.value); var box = e.target.closest('.picker'); box.outerHTML = shopPicker(); updPdf(); }
+  if (e.target.id === 'pick-op') { var s = currentShop(); if (s) store('op-' + s.id, e.target.value); updPdf(); }
 });
 var sf = document.getElementById('search');
 var timer;
