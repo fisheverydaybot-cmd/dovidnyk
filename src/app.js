@@ -352,11 +352,19 @@ function updPdf() {
 function canShareFiles() {
   try { return !!(navigator.share && navigator.canShare && navigator.canShare({ files: [new File(['x'], 'x.pdf', { type: 'application/pdf' })] })); } catch (e) { return false; }
 }
+var standalone = (function () { try { return window.navigator.standalone === true || (window.matchMedia && matchMedia('(display-mode: standalone)').matches); } catch (e) { return false; } })();
+function mMsg(t) { var m = $('#m-msg'); if (m) { m.textContent = t; m.hidden = !t; } }
 function sharePdf(f) {
-  var a = $('#m-pdf'), url = a.getAttribute('href');
-  if (!pdfBlob || pdfFor !== url) { location.href = url; return; }
-  var file = new File([pdfBlob], url.split('/').pop(), { type: 'application/pdf' });
-  navigator.share({ files: [file], title: f.title }).catch(function (e) { if (!e || e.name !== 'AbortError') location.href = url; });
+  var url = $('#m-pdf').getAttribute('href');
+  mMsg('');
+  var go = function (blob) { return navigator.share({ files: [new File([blob], url.split('/').pop(), { type: 'application/pdf' })], title: f.title }); };
+  var p = (pdfBlob && pdfFor === url) ? go(pdfBlob) :
+    fetch(url).then(function (r) { if (!r.ok) throw new Error('http'); return r.blob(); }).then(function (b) { pdfBlob = b; pdfFor = url; return go(b); });
+  p.catch(function (e) {
+    if (e && e.name === 'AbortError') return;
+    if (e && e.name === 'NotAllowedError') { mMsg('Бланк готовий. Натисніть «Друкувати» ще раз.'); return; }
+    mMsg('Не вдалося підготувати бланк. Перевірте інтернет і спробуйте ще раз.');
+  });
 }
 window.__dovForm = function (id) { var f = FORMS.filter(function (x) { return x.id === id; })[0]; doPrint(formHtml(f), f.portrait); };
 
@@ -364,15 +372,23 @@ function printForm(id) {
   var f = FORMS.filter(function (x) { return x.id === id; })[0]; if (!f) return;
   if (isMobile || inApp) {
     var share = canShareFiles();
-    showModal('<h3>🖨 ' + esc(f.title) + '</h3>' + shopPicker() +
-      (share ? '<div class="actions"><button class="btn" id="m-share">🖨 Друкувати</button></div>' +
-        '<p class="sub">Відкриється меню «Поділитися» → виберіть <b>Друк</b> → оберіть принтер (принтер має бути в тій самій Wi‑Fi мережі).</p>' +
-        '<p><a class="btn ghost" id="m-pdf" data-f="' + f.id + '" href="' + pdfName(f) + '" target="_blank" rel="noopener">Відкрити PDF</a></p>' :
-        '<div class="actions"><a class="btn" id="m-pdf" data-f="' + f.id + '" href="' + pdfName(f) + '" target="_blank" rel="noopener">Відкрити PDF для друку</a></div>' +
-        '<p class="sub">PDF відкриється на телефоні. Далі: <b>Поділитися</b> або меню <b>⋮</b> → <b>Друк</b> і оберіть принтер (принтер має бути в тій самій Wi‑Fi мережі).</p>') +
-      (inApp ? '<p class="warn">Ви відкрили довідник усередині Viber/Telegram. Якщо PDF не відкривається, натисніть ⋮ угорі → «Відкрити в браузері» (Chrome або Safari).</p>' :
-        (share ? '' : '<p><button class="btn ghost" id="m-print">Друк зі сторінки браузера</button></p>')) +
-      '<p><button class="btn ghost" id="m-no">Закрити</button></p>');
+    var link = '<a class="btn ghost" id="m-pdf" data-f="' + f.id + '" href="' + pdfName(f) + '" target="_blank" rel="noopener"' + (standalone ? ' hidden' : '') + '>Відкрити PDF</a>';
+    var body;
+    if (share) {
+      body = '<div class="actions"><button class="btn" id="m-share">🖨 Друкувати</button></div><p id="m-msg" class="warn" hidden></p>' +
+        '<p class="sub">Відкриється меню «Поділитися» → прокрутіть вниз → <b>Друк</b> → оберіть принтер (принтер має бути в тій самій Wi‑Fi мережі). Щоб повернутися, натисніть «Скасувати» або ✕.</p>' +
+        (standalone ? link : '<p>' + link + '</p>');
+    } else if (standalone) {
+      body = link + '<div class="actions"><button class="btn" id="m-print">🖨 Друкувати</button></div>' +
+        '<p class="sub">Якщо друк не відкрився, відкрийте довідник у браузері (Safari або Chrome) або надрукуйте бланк з компʼютера.</p>';
+    } else {
+      body = '<div class="actions">' + link.replace('btn ghost', 'btn').replace('>Відкрити PDF<', '>Відкрити PDF для друку<') + '</div>' +
+        '<p class="sub">PDF відкриється в новій вкладці. Далі: <b>Поділитися</b> або меню <b>⋮</b> → <b>Друк</b> і оберіть принтер.</p>' +
+        (inApp ? '' : '<p><button class="btn ghost" id="m-print">Друк зі сторінки браузера</button></p>');
+    }
+    showModal('<h3>🖨 ' + esc(f.title) + '</h3>' + shopPicker() + body +
+      (inApp ? '<p class="warn">Ви відкрили довідник усередині Viber/Telegram. Якщо нічого не відкривається, натисніть ⋮ угорі → «Відкрити в браузері» (Chrome або Safari).</p>' : '') +
+      '<p><button class="btn ghost" id="m-no">← Назад</button></p>');
     $('#m-no').onclick = hideModal;
     if (share) $('#m-share').onclick = function () { sharePdf(f); };
     updPdf();
