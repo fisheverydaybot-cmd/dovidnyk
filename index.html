@@ -2864,6 +2864,7 @@ function inline(t) {
   t = esc(t).replace(/\\([_*\\])/g, '$1');
   t = t.replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>');
   t = t.replace(/\*(.+?)\*/g, '<em>$1</em>');
+  t = t.replace(/\[([^\]]+)\]\(([^)\s]+)\)/g, '<a href="$2">$1</a>');
   return t;
 }
 

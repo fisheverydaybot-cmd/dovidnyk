@@ -42,6 +42,8 @@ app = re.sub(r"var ICONS = \{[^}]*\};", "var ICONS = { '1': '📦', '2': '❄️
 # пошук: різні апострофи -> ʼ
 if "var t = term.toLowerCase().trim();" in app:
     rep("var t = term.toLowerCase().trim();", "var t = term.toLowerCase().trim().replace(/['’`]/g, 'ʼ');")
+# плитка «Етикетки» на головній (сторінка vyrobnytstvo/etyketky/, генерує src/gen_etyketky.py --site)
+rep("бланків</small></a>' +", "бланків</small></a>' +\n  '<a class=\"tile alt\" href=\"etyketky/\"><span class=\"ico\">🏷️</span><span>Етикетки для Zebra</span><small>друк з QR</small></a>' +")
 # картинки в тексті: ![підпис](img/файл.png)
 rep("    if (/^(Бланк|Документ):/.test(l)) {",
     "    var im = /^!\\[(.*)\\]\\((.+)\\)$/.exec(l);\n    if (im) { out.push('<figure class=\"pic\"><a href=\"' + esc(im[2]) + '\" target=\"_blank\"><img src=\"' + esc(im[2]) + '\" alt=\"' + esc(im[1]) + '\" loading=\"lazy\"></a><figcaption>' + inline(im[1]) + '</figcaption></figure>'); i++; continue; }\n    if (/^(Бланк|Документ):/.test(l)) {")
