@@ -18,7 +18,7 @@ h1{font-size:26px;line-height:1.25;margin:4px 0 2px}h2{font-size:15px;text-trans
 .row{padding:12px 0;border-bottom:1px solid #edf1f3}.row:last-child{border-bottom:0}
 .k{font-size:13px;text-transform:uppercase;letter-spacing:.04em;color:#0b5d7a;font-weight:700;margin-bottom:2px}
 table{border-collapse:collapse;width:100%}td{padding:6px 0;border-bottom:1px solid #edf1f3}td:last-child{text-align:right;font-weight:600}
-.note{font-size:13px;color:#5b6873}.alg{background:#fff4dc;border-radius:10px;padding:10px 12px}
+.note{font-size:13px;color:#5b6873}.ph{margin:0 0 12px}.ph img{width:100%;height:auto;border-radius:14px;display:block;background:#dde5e9}.ph figcaption{font-size:13px;color:#5b6873;margin-top:4px}.alg{background:#fff4dc;border-radius:10px;padding:10px 12px}
 ul.list{list-style:none;padding:0}ul.list a{display:block;background:#fff;border:1px solid #d7dee3;border-radius:12px;padding:13px 14px;margin-bottom:8px;color:#1d2730;text-decoration:none;font-weight:600}
 ul.list small{display:block;font-weight:400;color:#5b6873}
 .sheet{display:grid;grid-template-columns:repeat(4,1fr);gap:4mm}.lbl{border:1px dashed #999;border-radius:6px;padding:3mm;text-align:center;break-inside:avoid;background:#fff}
@@ -53,6 +53,14 @@ def nutr_table(p):
             else 'На 100 г продукту. Орієнтовні дані за довідковими таблицями.')
     return t + f'</table><p class="note">{note}</p>'
 
+def photo(fk):
+    # фото сировини: покладіть p/img/<ключ риби>.jpg (ключі — FISH у products.py), підпис/автор — FISH[fk]['photo']
+    for ext in ('jpg', 'jpeg', 'png', 'webp'):
+        if os.path.exists(f'{out}/p/img/{fk}.{ext}'):
+            cap = FISH[fk].get('photo', FISH[fk]['name'] + ' — сировина')
+            return f'<figure class="ph"><img src="../img/{fk}.{ext}" alt="{e(FISH[fk]["name"])}" loading="lazy"><figcaption>{e(cap)}</figcaption></figure>'
+    return ''
+
 os.makedirs(f'{out}/p/qr', exist_ok=True)
 for p in P:
     fi = FISH[p['fk']]
@@ -67,7 +75,7 @@ for p in P:
             row('Харчова цінність', nutr_table(p)) +
             row('Алергени', '<div class="alg">Містить <b>рибу</b>.</div>') +
             row('Як подавати', f'<div>{e(p["serve"])}</div>') +
-            f'</div><h2>Про рибу</h2><div class="card">' +
+            f'</div><h2>Про рибу</h2>' + photo(p['fk']) + '<div class="card">' +
             row('Риба', f'<div>{e(fi["name"])} <i>({e(fi["latin"])})</i></div>') +
             row('Родина', f'<div>{e(fi["family"])}</div>') +
             row('Де ловлять', f'<div>{e(fi["habitat"])}</div>') +
