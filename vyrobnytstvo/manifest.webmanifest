@@ -1,0 +1,16 @@
+{
+ "name": "НАССР · Цех · Риба Щодня",
+ "short_name": "НАССР цех",
+ "start_url": ".",
+ "display": "standalone",
+ "background_color": "#f6f8f9",
+ "theme_color": "#0b5d7a",
+ "lang": "uk",
+ "icons": [
+  {
+   "src": "icon.svg",
+   "sizes": "any",
+   "type": "image/svg+xml"
+  }
+ ]
+}
