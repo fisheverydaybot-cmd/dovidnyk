@@ -50,14 +50,18 @@ t = t.replace('<title>Довідник НАССР · Риба Щодня</title>
 t = t.replace('<a href="#" id="home">🐟 Довідник НАССР</a><small>Риба Щодня · чернетка</small>', '<a href="#" id="home">🐟 НАССР · Цех</a><small>Риба Щодня · виробництво · чернетка</small>')
 t = t.replace('placeholder="Пошук: морожена, дезрозчин, скарга…"', 'placeholder="Пошук: тузлук, скумбрія, копчення, відходи…"')
 t = t.replace('</style>\n</head>', '.pic{margin:12px 0}.pic img{width:100%;height:auto;border:1px solid var(--line);border-radius:10px;background:#fff}.pic figcaption{font-size:13px;color:var(--q)}\n</style>\n</head>')
+# світліша зелена гама, щоб цех відрізнявся від магазинів (синя)
+for a, b in [('#0b5d7a', '#2e8b57'), ('#e8f3f7', '#e9f6ee'), ('#9cc7d6', '#a8d8b9'), ('#c6e0ea', '#cfe9d8'), ('#f6f8f9', '#f5faf7')]:
+    assert a in t, a
+    t = t.replace(a, b)
 assert 'НАССР · Цех' in t and '.pic{' in t
 
 for x in (md, qr, app): assert '</script' not in x.lower()
 html = t.replace('__CONTENT__', md).replace('__QRLIB__', qr).replace('__APP__', app)
 open(f'{out}/index.html', 'w').write(html)
-open(f'{out}/manifest.webmanifest', 'w').write(json.dumps({"name": "НАССР · Цех · Риба Щодня", "short_name": "НАССР цех", "start_url": ".", "display": "standalone", "background_color": "#f6f8f9", "theme_color": "#0b5d7a", "lang": "uk", "icons": [{"src": "icon.svg", "sizes": "any", "type": "image/svg+xml"}]}, ensure_ascii=False, indent=1))
-open(f'{out}/icon.svg', 'w').write('<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64"><rect width="64" height="64" rx="14" fill="#7a3b0b"/><text x="32" y="44" font-size="34" text-anchor="middle">🐟</text></svg>')
-open(f'{out}/sw.js', 'w').write("""const C='vyrobnytstvo-v1';const F=['./','index.html','manifest.webmanifest','icon.svg'];
+open(f'{out}/manifest.webmanifest', 'w').write(json.dumps({"name": "НАССР · Цех · Риба Щодня", "short_name": "НАССР цех", "start_url": ".", "display": "standalone", "background_color": "#f5faf7", "theme_color": "#2e8b57", "lang": "uk", "icons": [{"src": "icon.svg", "sizes": "any", "type": "image/svg+xml"}]}, ensure_ascii=False, indent=1))
+open(f'{out}/icon.svg', 'w').write('<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64"><rect width="64" height="64" rx="14" fill="#2e8b57"/><text x="32" y="44" font-size="34" text-anchor="middle">🐟</text></svg>')
+open(f'{out}/sw.js', 'w').write("""const C='vyrobnytstvo-v2';const F=['./','index.html','manifest.webmanifest','icon.svg'];
 self.addEventListener('install',e=>{e.waitUntil(caches.open(C).then(c=>c.addAll(F)));self.skipWaiting()});
 self.addEventListener('activate',e=>{e.waitUntil(caches.keys().then(k=>Promise.all(k.filter(x=>x.startsWith('vyrobnytstvo-')&&x!==C).map(x=>caches.delete(x)))));self.clients.claim()});
 self.addEventListener('fetch',e=>{if(e.request.method!=='GET')return;e.respondWith(fetch(e.request).then(r=>{const cp=r.clone();caches.open(C).then(c=>c.put(e.request,cp));return r}).catch(()=>caches.match(e.request).then(r=>r||caches.match('index.html'))))});
