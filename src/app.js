@@ -344,18 +344,17 @@ function prefetchPdf(url) {
   if (!window.fetch) return;
   fetch(url).then(function (r) { if (!r.ok) throw 0; return r.blob(); }).then(function (b) { if (pdfFor === url) pdfBlob = b; }).catch(function () {});
 }
-function updPdf() {
-  var a = $('#m-pdf'); if (!a || !a.getAttribute('data-f')) return;
-  a.href = pdfName(FORMS.filter(function (x) { return x.id === a.getAttribute('data-f'); })[0]);
-  prefetchPdf(a.getAttribute('href'));
-}
 function canShareFiles() {
   try { return !!(navigator.share && navigator.canShare && navigator.canShare({ files: [new File(['x'], 'x.pdf', { type: 'application/pdf' })] })); } catch (e) { return false; }
 }
 var standalone = (function () { try { return window.navigator.standalone === true || (window.matchMedia && matchMedia('(display-mode: standalone)').matches); } catch (e) { return false; } })();
 function mMsg(t) { var m = $('#m-msg'); if (m) { m.textContent = t; m.hidden = !t; } }
+window.__dovForm = function (id) { var f = FORMS.filter(function (x) { return x.id === id; })[0]; doPrint(formHtml(f), f.portrait); };
+
+var curForm = null;
+function updPdf() { if (curForm) { prefetchPdf(pdfName(curForm)); renderPreview(); } }
 function sharePdf(f) {
-  var url = $('#m-pdf').getAttribute('href');
+  var url = pdfName(f);
   mMsg('');
   var go = function (blob) { return navigator.share({ files: [new File([blob], url.split('/').pop(), { type: 'application/pdf' })], title: f.title }); };
   var p = (pdfBlob && pdfFor === url) ? go(pdfBlob) :
@@ -366,42 +365,43 @@ function sharePdf(f) {
     mMsg('Не вдалося підготувати бланк. Перевірте інтернет і спробуйте ще раз.');
   });
 }
-window.__dovForm = function (id) { var f = FORMS.filter(function (x) { return x.id === id; })[0]; doPrint(formHtml(f), f.portrait); };
-
-function printForm(id) {
-  var f = FORMS.filter(function (x) { return x.id === id; })[0]; if (!f) return;
+function renderPreview() {
+  var pv = $('#preview'); if (!pv || pv.hidden || !curForm) return;
+  var f = curForm, holder = $('.pv-scroll', pv);
+  holder.innerHTML = '<div class="pv-sheet"><div class="pv-page ' + (f.portrait ? 'pv-p' : 'pv-l') + '">' + formHtml(f) + '</div></div>';
+  var page = $('.pv-page', holder), sheet = $('.pv-sheet', holder);
+  var avail = holder.clientWidth - 16, w = page.offsetWidth, k = Math.min(1, avail / w);
+  page.style.transform = 'scale(' + k + ')';
+  sheet.style.width = (w * k) + 'px'; sheet.style.height = (page.offsetHeight * k) + 'px';
+}
+function closePreview() { var pv = $('#preview'); if (pv) pv.hidden = true; document.body.classList.remove('pv-open'); curForm = null; }
+function doPrintCurrent() {
+  var f = curForm; if (!f) return;
   if (isMobile || inApp) {
-    var share = canShareFiles();
-    var link = '<a class="btn ghost" id="m-pdf" data-f="' + f.id + '" href="' + pdfName(f) + '" target="_blank" rel="noopener"' + (standalone ? ' hidden' : '') + '>Відкрити PDF</a>';
-    var body;
-    if (share) {
-      body = '<div class="actions"><button class="btn" id="m-share">🖨 Друкувати</button></div><p id="m-msg" class="warn" hidden></p>' +
-        '<p class="sub">Відкриється меню «Поділитися» → прокрутіть вниз → <b>Друк</b> → оберіть принтер (принтер має бути в тій самій Wi‑Fi мережі). Щоб повернутися, натисніть «Скасувати» або ✕.</p>' +
-        (standalone ? link : '<p>' + link + '</p>');
-    } else if (standalone) {
-      body = link + '<div class="actions"><button class="btn" id="m-print">🖨 Друкувати</button></div>' +
-        '<p class="sub">Якщо друк не відкрився, відкрийте довідник у браузері (Safari або Chrome) або надрукуйте бланк з компʼютера.</p>';
-    } else {
-      body = '<div class="actions">' + link.replace('btn ghost', 'btn').replace('>Відкрити PDF<', '>Відкрити PDF для друку<') + '</div>' +
-        '<p class="sub">PDF відкриється в новій вкладці. Далі: <b>Поділитися</b> або меню <b>⋮</b> → <b>Друк</b> і оберіть принтер.</p>' +
-        (inApp ? '' : '<p><button class="btn ghost" id="m-print">Друк зі сторінки браузера</button></p>');
-    }
-    showModal('<h3>🖨 ' + esc(f.title) + '</h3>' + shopPicker() + body +
-      (inApp ? '<p class="warn">Ви відкрили довідник усередині Viber/Telegram. Якщо нічого не відкривається, натисніть ⋮ угорі → «Відкрити в браузері» (Chrome або Safari).</p>' : '') +
-      '<p><button class="btn ghost" id="m-no">← Назад</button></p>');
-    $('#m-no').onclick = hideModal;
-    if (share) $('#m-share').onclick = function () { sharePdf(f); };
-    updPdf();
-    if ($('#m-print')) $('#m-print').onclick = function () { hideModal(); doPrint(formHtml(f), f.portrait); };
-    return;
-  }
-  if (!currentShop()) {
-    showModal('<h3>Для якого магазину бланк?</h3>' + shopPicker() + '<div class="actions"><button class="btn" id="m-ok">Друкувати</button> <button class="btn ghost" id="m-no">Без магазину</button></div>');
-    $('#m-ok').onclick = function () { hideModal(); doPrint(formHtml(f), f.portrait); };
-    $('#m-no').onclick = function () { hideModal(); doPrint(formHtml(f), f.portrait); };
-    return;
+    if (canShareFiles()) return sharePdf(f);
+    if (!standalone) { window.open(pdfName(f), '_blank'); return; }
   }
   doPrint(formHtml(f), f.portrait);
+}
+function printForm(id) {
+  var f = FORMS.filter(function (x) { return x.id === id; })[0]; if (!f) return;
+  var pv = $('#preview');
+  if (!pv) {
+    pv = document.createElement('div'); pv.id = 'preview';
+    pv.innerHTML = '<div class="pv-top"><div class="pv-title"></div><div class="pv-shop"></div><p id="m-msg" class="warn" hidden></p></div>' +
+      '<div class="pv-scroll"></div>' +
+      '<div class="pv-bar"><button class="btn ghost" id="pv-back">← Назад</button><button class="btn" id="pv-print">🖨 Друкувати</button></div>';
+    document.body.appendChild(pv);
+    $('#pv-back').onclick = closePreview;
+    $('#pv-print').onclick = doPrintCurrent;
+    window.addEventListener('resize', renderPreview);
+  }
+  curForm = f; pv.hidden = false; document.body.classList.add('pv-open');
+  $('.pv-title', pv).textContent = f.title;
+  $('.pv-shop', pv).innerHTML = shopPicker() + (inApp ? '<p class="warn">Ви відкрили довідник усередині Viber/Telegram. Якщо друк не відкривається, натисніть ⋮ угорі → «Відкрити в браузері».</p>' : '');
+  mMsg('');
+  prefetchPdf(pdfName(f));
+  renderPreview();
 }
 
 function showModal(h) { var m = $('#modal'); $('#modal .box').innerHTML = h; m.hidden = false; }
@@ -437,7 +437,7 @@ sf.addEventListener('input', function () {
 });
 document.getElementById('search-form').addEventListener('submit', function (e) { e.preventDefault(); sf.blur(); });
 document.getElementById('home').addEventListener('click', function () { sf.value = ''; });
-window.addEventListener('hashchange', function () { sf.value = ''; route(); });
+window.addEventListener('hashchange', function () { sf.value = ''; closePreview(); route(); });
 route();
 
 if ('serviceWorker' in navigator && !inFrame && location.protocol === 'https:') {
