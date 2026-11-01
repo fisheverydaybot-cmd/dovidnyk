@@ -53,7 +53,7 @@ var FORM_MATCH = [
   ['журнал медоглядів', 'medohlyady'], ['журнал обладнання', 'obladnannya'], ['журнал відвідувачів', 'vidviduvachi']
 ];
 
-var QR_DEFAULT = ['home', 'moroz', 'vitryna', 'temperatury', 'priymannya', 'prybyrannya', 'dezrozchyn', 'ruky', 'zdorovya', 'svitlo', 'skarga', 'strok', 'nozhi'];
+var QR_DEFAULT = ['home', 'moroz', 'moroz-rozbyrannya', 'susidstvo', 'kopchennya', 'vitryna', 'temperatury', 'priymannya', 'prybyrannya', 'dezrozchyn', 'ruky', 'zdorovya', 'svitlo', 'skarga', 'strok', 'nozhi'];
 
 // ---------- Утиліти ----------
 function $(s, r) { return (r || document).querySelector(s); }
@@ -98,8 +98,8 @@ function blocksToHtml(lines) {
       while (i < lines.length && /^\|/.test(lines[i])) { rows.push(lines[i]); i++; }
       var cells = function (r) { return r.replace(/^\||\|$/g, '').split('|').map(function (c) { return c.trim(); }); };
       var h = cells(rows[0]);
-      var body = rows.slice(2).map(function (r) { return '<tr>' + cells(r).map(function (c) { return '<td>' + inline(c) + '</td>'; }).join('') + '</tr>'; });
-      out.push('<div class="tw"><table><thead><tr>' + h.map(function (c) { return '<th>' + inline(c) + '</th>'; }).join('') + '</tr></thead><tbody>' + body.join('') + '</tbody></table></div>');
+      var body = rows.slice(2).map(function (r) { return '<tr>' + cells(r).map(function (c, i) { return '<td data-l="' + esc(h[i] || '') + '">' + inline(c) + '</td>'; }).join('') + '</tr>'; });
+      out.push('<div class="tw"><table' + (h.length > 3 ? ' class="stack"' : '') + '><thead><tr>' + h.map(function (c) { return '<th>' + inline(c) + '</th>'; }).join('') + '</tr></thead><tbody>' + body.join('') + '</tbody></table></div>');
       continue;
     }
     if (/^(Бланк|Документ):/.test(l)) {
