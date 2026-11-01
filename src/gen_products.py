@@ -13,7 +13,7 @@ e = html.escape
 CSS = """*{box-sizing:border-box}body{margin:0;font:17px/1.55 system-ui,-apple-system,"Segoe UI",Roboto,Arial,sans-serif;color:#1d2730;background:#f4f7f8}
 header{background:#0b5d7a;color:#fff;padding:14px 16px}header a{color:#fff;text-decoration:none;font-weight:700;font-size:19px}header small{display:block;opacity:.8;font-size:13px}
 main{max-width:680px;margin:0 auto;padding:16px 14px 50px}
-h1{font-size:26px;line-height:1.25;margin:4px 0 2px}.lat{color:#5b6873;font-style:italic;margin:0 0 14px}
+h1{font-size:26px;line-height:1.25;margin:4px 0 2px}h2{font-size:15px;text-transform:uppercase;letter-spacing:.04em;color:#5b6873;margin:18px 0 6px}.lat{color:#5b6873;font-style:italic;margin:0 0 14px}
 .card{background:#fff;border:1px solid #d7dee3;border-radius:14px;padding:4px 16px;margin-bottom:12px}
 .row{padding:12px 0;border-bottom:1px solid #edf1f3}.row:last-child{border-bottom:0}
 .k{font-size:13px;text-transform:uppercase;letter-spacing:.04em;color:#0b5d7a;font-weight:700;margin-bottom:2px}
@@ -37,31 +37,56 @@ SMOKE = {
 
 def row(k, v): return f'<div class="row"><div class="k">{e(k)}</div>{v}</div>'
 
+FISH = m.FISH
+for p in P:
+    fi = FISH[p['fk']]
+    p.setdefault('fish', fi['name']); p.setdefault('latin', fi['latin'])
+
+def nutr_table(p):
+    b, f, c, kcal = p['nutr']
+    num = lambda x: str(x).replace('.', ',')
+    t = (f'<table><tr><td>Енергетична цінність</td><td>{kcal} ккал / {round(kcal * 4.184)} кДж</td></tr>'
+         f'<tr><td>Білки</td><td>{num(b)} г</td></tr><tr><td>Жири</td><td>{num(f)} г</td></tr>')
+    if c is not None:
+        t += f'<tr><td>Вуглеводи</td><td>{num(c)} г</td></tr>'
+    note = ('На 100 г продукту, як на етикетці виробника.' if c is None
+            else 'На 100 г продукту. Орієнтовні дані за довідковими таблицями.')
+    return t + f'</table><p class="note">{note}</p>'
+
 os.makedirs(f'{out}/p/qr', exist_ok=True)
 for p in P:
-    b, f, c, kcal = p['nutr']
-    kj = round(kcal * 4.184)
-    nut = (f'<table><tr><td>Енергетична цінність</td><td>{kcal} ккал / {kj} кДж</td></tr><tr><td>Білки</td><td>{str(b).replace('.',',')} г</td></tr>'
-           f'<tr><td>Жири</td><td>{str(f).replace('.',',')} г</td></tr><tr><td>Вуглеводи</td><td>{c} г</td></tr></table>'
-           '<p class="note">На 100 г продукту. Орієнтовні дані за довідковими таблицями.</p>')
-    body = (f'<h1>{e(p["name"])}</h1><p class="lat">{e(p["fish"])} · {e(p["latin"])}</p><div class="card">' +
-            row('Де водиться', f'<div>{e(p["habitat"])}</div>') +
-            row('Категорія', f'<div>{e(p["category"])}</div>') +
+    fi = FISH[p['fk']]
+    same = [o for o in P if o['fk'] == p['fk'] and o is not p]
+    more = ('<ul class="list">' + ''.join(f'<li><a href="../{o["id"]}/">{e(o["name"])}</a></li>' for o in same) + '</ul>') if same else ''
+    body = (f'<h1>{e(p["name"])}</h1><p class="lat">{e(fi["name"])} · {e(fi["latin"])}</p>'
+            '<h2>Про продукт</h2><div class="card">' +
+            row('Що це', f'<div>{e(p["category"])}</div>') +
             row('Як виготовлено', f'<div>{e(p["method"])}</div>') +
             (row('Гаряче чи холодне копчення?', SMOKE[p['smoke']]) if p.get('smoke') else '') +
             row('Склад', f'<div>{e(p["composition"])}</div>') +
-            row('Харчова цінність', nut) +
+            row('Харчова цінність', nutr_table(p)) +
             row('Алергени', '<div class="alg">Містить <b>рибу</b>.</div>') +
             row('Як подавати', f'<div>{e(p["serve"])}</div>') +
-            '</div><p class="note">Виробник, дата виготовлення, номер партії, умови і строк зберігання вказані на етикетці товару.</p>')
+            f'</div><h2>Про рибу</h2><div class="card">' +
+            row('Риба', f'<div>{e(fi["name"])} <i>({e(fi["latin"])})</i></div>') +
+            row('Родина', f'<div>{e(fi["family"])}</div>') +
+            row('Де ловлять', f'<div>{e(fi["habitat"])}</div>') +
+            row('Чим корисна', f'<div>{e(fi["value"])}</div>') +
+            '</div>' + (f'<h2>Що ще ми робимо з цієї риби</h2>{more}' if more else '') +
+            '<p class="note">Виробник, дата виготовлення, номер партії, умови і строк зберігання вказані на етикетці товару.</p>')
     os.makedirs(f'{out}/p/{p["id"]}', exist_ok=True)
     open(f'{out}/p/{p["id"]}/index.html', 'w').write(page(p['name'], body))
     q = segno.make(BASE + p['id'] + '/', error='m')
     q.save(f'{out}/p/qr/{p["id"]}.svg', scale=4, border=2)
     q.save(f'{out}/p/qr/{p["id"]}.png', scale=12, border=2)
 
-lst = '<h1>Наша продукція</h1><ul class="list">' + ''.join(
-    f'<li><a href="{p["id"]}/">{e(p["name"])}<small>{e(p["category"])}</small></a></li>' for p in P) + '</ul>'
+groups = {}
+for p in P:
+    groups.setdefault(p['fk'], []).append(p)
+lst = '<h1>Наша продукція</h1>' + ''.join(
+    f'<h2>{e(FISH[k]["name"])}</h2><ul class="list">' + ''.join(
+        f'<li><a href="{p["id"]}/">{e(p["name"])}<small>{e(p["category"])}</small></a></li>' for p in ps) + '</ul>'
+    for k, ps in groups.items())
 open(f'{out}/p/index.html', 'w').write(page('Наша продукція', lst, back=False))
 
 sheet = ('<div class="noprint"><h1>QR-коди для етикеток</h1><p class="note">Для персоналу. Кожен код веде на картку товару. '
