@@ -82,7 +82,21 @@ def layout(l, body=17):
     ops.append(('text', (W - tw([(l['std'], False)], body)) / 2, y, body, [(l['std'], False)]))
     lh = body + 1
     fish, rest = l['comp'].split(',', 1) if ',' in l['comp'] else (l['comp'], '')
-    paras = [[('Склад: ', False), (fish, True), (',' + rest + '.' if rest else '.', False)]]
+    comp = [('Склад: ', False), (fish, True)]
+    if rest:
+        # алергени в складі (крім риби) теж жирним
+        for i, part in enumerate((',' + rest).split('гірчиця')):
+            if i:
+                comp.append(('гірчиця', True))
+            comp.append((part, False))
+    comp.append(('.', False))
+    merged = []
+    for t, b in comp:
+        if merged and merged[-1][1] == b:
+            merged[-1] = (merged[-1][0] + t, b)
+        else:
+            merged.append((t, b))
+    paras = [merged]
     if l['salt']:
         paras.append([('Ступінь солоності: ' + l['salt'] + '.', False)])
     lo, hi = l['t']
