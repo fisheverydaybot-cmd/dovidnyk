@@ -63,13 +63,19 @@ def prod_photo(pid):
             return f'<figure class="pp"><img src="../img/prod/{pid}.{ext}?v={v}" alt="Готовий продукт" loading="lazy"><figcaption>Готовий продукт</figcaption></figure>'
     return ''
 
-def photo(fk):
+# окреме фото сировини для конкретного продукту: p/img/syr/<id>.jpg, підпис — SYR_CAP[id]; інакше спільне фото риби
+SYR_CAP = {'losos-file': 'Лосось охолоджений, стейк — сировина для філе, стейків і шматків'}
+
+def photo(fk, pid=None):
     # фото сировини: покладіть p/img/<ключ риби>.jpg (ключі — FISH у products.py), підпис/автор — FISH[fk]['photo']
-    for ext in ('jpg', 'jpeg', 'png', 'webp'):
-        if os.path.exists(f'{out}/p/img/{fk}.{ext}'):
-            cap = FISH[fk].get('photo', FISH[fk]['name'] + ' — сировина')
-            v = hashlib.md5(open(f'{out}/p/img/{fk}.{ext}', 'rb').read()).hexdigest()[:8]  # щоб браузер не показував старе фото з кешу
-            return f'<figure class="ph"><img src="../img/{fk}.{ext}?v={v}" alt="{e(FISH[fk]["name"])}" loading="lazy"><figcaption>{e(cap)}</figcaption></figure>'
+    cands = ([(f'syr/{pid}', SYR_CAP.get(pid))] if pid else []) + [(fk, None)]
+    for name, cap in cands:
+        for ext in ('jpg', 'jpeg', 'png', 'webp'):
+            fn = f'{out}/p/img/{name}.{ext}'
+            if os.path.exists(fn):
+                cap = cap or FISH[fk].get('photo', FISH[fk]['name'] + ' — сировина')
+                v = hashlib.md5(open(fn, 'rb').read()).hexdigest()[:8]  # щоб браузер не показував старе фото з кешу
+                return f'<figure class="ph"><img src="../img/{name}.{ext}?v={v}" alt="{e(FISH[fk]["name"])}" loading="lazy"><figcaption>{e(cap)}</figcaption></figure>'
     return ''
 
 os.makedirs(f'{out}/p/qr', exist_ok=True)
@@ -92,7 +98,7 @@ for p in P:
             row('Родина', f'<div>{e(fi["family"])}</div>') +
             row('Де ловлять', f'<div>{e(fi["habitat"])}</div>') +
             row('Чим корисна', f'<div>{e(fi["value"])}</div>') +
-            '</div>' + photo(p['fk']) + (f'<h2>Що ще ми робимо з цієї риби</h2>{more}' if more else '') +
+            '</div>' + photo(p['fk'], p['id']) + (f'<h2>Що ще ми робимо з цієї риби</h2>{more}' if more else '') +
             '<p class="note">Виробник, дата виготовлення, номер партії, умови і строк зберігання вказані на етикетці товару.</p>')
     os.makedirs(f'{out}/p/{p["id"]}', exist_ok=True)
     open(f'{out}/p/{p["id"]}/index.html', 'w').write(page(p['name'], body))
