@@ -1,3 +1,4 @@
+import hashlib
 # python gen_products.py <siteDir> — генерує картки продукції p/<id>/ , список p/ , QR-коди p/qr/
 import os, sys, html, importlib.util
 import segno
@@ -58,7 +59,8 @@ def photo(fk):
     for ext in ('jpg', 'jpeg', 'png', 'webp'):
         if os.path.exists(f'{out}/p/img/{fk}.{ext}'):
             cap = FISH[fk].get('photo', FISH[fk]['name'] + ' — сировина')
-            return f'<figure class="ph"><img src="../img/{fk}.{ext}" alt="{e(FISH[fk]["name"])}" loading="lazy"><figcaption>{e(cap)}</figcaption></figure>'
+            v = hashlib.md5(open(f'{out}/p/img/{fk}.{ext}', 'rb').read()).hexdigest()[:8]  # щоб браузер не показував старе фото з кешу
+            return f'<figure class="ph"><img src="../img/{fk}.{ext}?v={v}" alt="{e(FISH[fk]["name"])}" loading="lazy"><figcaption>{e(cap)}</figcaption></figure>'
     return ''
 
 os.makedirs(f'{out}/p/qr', exist_ok=True)
