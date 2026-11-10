@@ -165,7 +165,7 @@ var DATA = parse(document.getElementById('content-md').textContent);
 var ALLQ = [];
 DATA.sections.forEach(function (s) { s.qs.forEach(function (q) { ALLQ.push(q); }); });
 
-var ICONS = { '1': '📦', '2': '❄️', '3': '🧽', '4': '🧼', '5': '🏷️', '6': '⚠️' };
+var ICONS = { '1': '📦', '2': '❄️', '3': '🧽', '4': '🧼', '5': '🏷️', '6': '⚠️', '7': '💬' };
 
 // ---------- Вибір магазину ----------
 function currentShop() {
