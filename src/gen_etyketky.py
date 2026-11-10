@@ -105,7 +105,7 @@ def layout(l, body=17):
         lo, hi = l['t']
         paras.append([(f'Зберігати при t від {deg(lo)} до {deg(hi)} °C. Термін придатності {l["term"].rstrip(".")}.', False)])
     b = str(l['b']).replace('.', ',')
-    paras.append([(f'Поживна цінність 100 г: білки {b} г, жири {l["f"]} г.', False)])
+    paras.append([(f'Поживна цінність 100 г: білки {b} г, жири {str(l["f"]).replace('.', ',')} г.', False)])
     paras.append([(f'Енергетична цінність 100 г: {l["kcal"]} ккал / {round(l["kcal"] * 4.184)} кДж.', False)])
     for p in paras:
         for ln in wrap(p, body, full):
@@ -284,15 +284,17 @@ input{width:100%;font:inherit;padding:11px 13px;border:1px solid #a8d8b9;border-
 
 # Групи на сторінці друку. Порядок = порядок вкладок. Етикетці можна задати групу вручну: поле 'cat' у src/etyketky.py.
 CATS = [('sol', 'Солона'), ('pryan', 'Пряного і спецпосолу'), ('mar', 'Мариновані, в олії, в заливці'),
-        ('kopch', 'Копчена'), ('vyal', 'Вʼялена і сушена'), ('moroz', 'Морожена')]
+        ('hk', 'Гарячого копчення'), ('khk', 'Холодного копчення'), ('vyal', 'Вʼялена і сушена'), ('moroz', 'Морожена')]
 
 
 def cat(l):
     if l.get('cat'):
         return l['cat']
     t = ' '.join(l['title']).lower().replace("'", 'ʼ').replace('’', 'ʼ')
+    if 'гарячого копч' in t:
+        return 'hk'
     if 'копч' in t:
-        return 'kopch'
+        return 'khk'
     if 'вʼял' in t or 'сушен' in t:
         return 'vyal'
     if 'морож' in t:
