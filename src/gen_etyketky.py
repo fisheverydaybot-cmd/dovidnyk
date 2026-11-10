@@ -99,8 +99,11 @@ def layout(l, body=17):
     paras = [merged]
     if l['salt']:
         paras.append([('Ступінь солоності: ' + l['salt'] + '.', False)])
-    lo, hi = l['t']
-    paras.append([(f'Зберігати при t від {deg(lo)} до {deg(hi)} °C. Термін придатності {l["term"].rstrip(".")}.', False)])
+    if isinstance(l['t'], str):      # складні умови зберігання — готовим текстом
+        paras.append([(l['t'].rstrip('.') + '.', False)])
+    else:
+        lo, hi = l['t']
+        paras.append([(f'Зберігати при t від {deg(lo)} до {deg(hi)} °C. Термін придатності {l["term"].rstrip(".")}.', False)])
     b = str(l['b']).replace('.', ',')
     paras.append([(f'Поживна цінність 100 г: білки {b} г, жири {l["f"]} г.', False)])
     paras.append([(f'Енергетична цінність 100 г: {l["kcal"]} ккал / {round(l["kcal"] * 4.184)} кДж.', False)])
@@ -271,9 +274,34 @@ input{width:100%;font:inherit;padding:11px 13px;border:1px solid #a8d8b9;border-
 .vars{background:#fff;border:2px solid #2e8b57;border-radius:12px;padding:10px 14px;margin-bottom:12px}
 .row3{display:grid;grid-template-columns:repeat(3,1fr);gap:10px}.vars label{font-size:14px;font-weight:600;color:#1d5c3a}
 .vars input{margin:4px 0 0}.vars .chk{display:flex;gap:8px;align-items:center;font-weight:400;color:#1d2730}.vars .chk input{width:auto;margin:0}
+.tabs{display:flex;flex-wrap:wrap;gap:6px;margin:4px 0 0}.tab{font:inherit;font-size:15px;font-weight:600;padding:8px 12px;border-radius:20px;border:1px solid #a8d8b9;background:#fff;color:#1d5c3a;cursor:pointer}
+.tab span{font-weight:400;opacity:.7}.tab.on{background:#2e8b57;color:#fff;border-color:#2e8b57}
+.grp h2{font-size:16px;text-transform:uppercase;letter-spacing:.04em;color:#1d5c3a;margin:18px 0 8px}
 .tip{font-size:13px;color:#5b6873;margin:6px 0 0}
 @media(max-width:520px){.row3{grid-template-columns:1fr}}
 @media(max-width:520px){.it{flex-direction:column;align-items:flex-start}.it img{width:100%}}"""
+
+
+# Групи на сторінці друку. Порядок = порядок вкладок. Етикетці можна задати групу вручну: поле 'cat' у src/etyketky.py.
+CATS = [('sol', 'Солона'), ('pryan', 'Пряного і спецпосолу'), ('mar', 'Мариновані, в олії, в заливці'),
+        ('kopch', 'Копчена'), ('vyal', 'Вʼялена і сушена'), ('moroz', 'Морожена')]
+
+
+def cat(l):
+    if l.get('cat'):
+        return l['cat']
+    t = ' '.join(l['title']).lower().replace("'", 'ʼ').replace('’', 'ʼ')
+    if 'копч' in t:
+        return 'kopch'
+    if 'вʼял' in t or 'сушен' in t:
+        return 'vyal'
+    if 'морож' in t:
+        return 'moroz'
+    if any(w in t for w in ('маринов', 'олії', 'заливц', 'соус')):
+        return 'mar'
+    if 'пряного' in t or 'спеціального посолу' in t:
+        return 'pryan'
+    return 'sol'
 
 
 def site(sitedir, labels):
@@ -288,12 +316,19 @@ def site(sitedir, labels):
         for sub, ext in (('pdf', 'pdf'), ('zpl', 'zpl'), ('png', 'png')):
             shutil.copy(os.path.join(src, sub, l['_name'] + '.' + ext), os.path.join(sitedir, sub, slug + '.' + ext))
         title = ' '.join(l['title'])
-        items.append(f'<div class="it" data-q="{e(title.lower())}" data-s="{slug}" data-f=\'{json.dumps(l["_slots"])}\'>'
+        items.append((cat(l), f'<div class="it" data-c="{cat(l)}" data-q="{e(title.lower())}" data-s="{slug}" data-f=\'{json.dumps(l["_slots"])}\'>'
                      f'<img src="png/{slug}.png" alt="" loading="lazy"><div><b>{e(title)}</b>'
                      f'<small>{e(l["std"])} · {e(l["term"])}</small><br>'
                      f'<a href="#" data-act="print">🖨 Друкувати на Zebra</a>'
                      f'<a class="z" href="#" data-act="zpl">ZPL з датою</a>'
-                     f'<a class="z" href="pdf/{slug}.pdf" target="_blank">PDF без дати</a></div></div>')
+                     f'<a class="z" href="pdf/{slug}.pdf" target="_blank">PDF без дати</a></div></div>'))
+    groups, tabs = [], ['<button class="tab on" data-t="">Усі <span>' + str(len(items)) + '</span></button>']
+    for k, name in CATS:
+        g = [h for c, h in items if c == k]
+        if not g:
+            continue
+        tabs.append(f'<button class="tab" data-t="{k}">{e(name)} <span>{len(g)}</span></button>')
+        groups.append(f'<section class="grp" data-g="{k}"><h2>{e(name)}</h2>' + ''.join(g) + '</section>')
     page = f"""<!DOCTYPE html><html lang="uk"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Етикетки · Цех · Риба Щодня</title><meta name="theme-color" content="#2e8b57"><style>{SITE_CSS}</style></head><body>
 <header><a href="../">🐟 НАССР · Цех</a><small>Етикетки для принтера Zebra</small></header><main>
@@ -307,8 +342,9 @@ def site(sitedir, labels):
 <div class="how"><p><b>Як надрукувати:</b> заповніть дату (і партію), знайдіть товар і натисніть «🖨 Друкувати на Zebra». У вікні друку виберіть принтер
 <b>ZDesigner…</b>, поля — «Немає», масштаб — <b>100 %</b>, і вкажіть кількість копій.</p>
 <p>«ZPL з датою» — файл з уже вписаною датою, для друку напряму через Zebra Setup Utilities («Send file»).</p></div>
+<div class="tabs" id="tabs">{''.join(tabs)}</div>
 <input id="q" type="search" placeholder="Пошук: оселедець, скумбрія, товстолоб…" autocomplete="off">
-<div id="list">{''.join(items)}</div>
+<div id="list">{''.join(groups)}</div>
 <p class="note" style="font-size:13px;color:#5b6873">Етикеток: {len(labels)}. Виробник ТОВ «ФІШ-МАКСИМУМ ТРЕЙД». Щоб змінити текст етикетки — напишіть, хто веде довідник (дані в src/etyketky.py).</p>
 </main><script>
 var W={W},H={H};
@@ -341,8 +377,14 @@ var a=document.createElement('a');a.href=URL.createObjectURL(new Blob([z],{{type
 document.getElementById('list').addEventListener('click',function(ev){{var a=ev.target.closest('[data-act]');if(!a)return;ev.preventDefault();
 var it=a.closest('.it'),o=vals();if(!check(o))return;
 render(it,o).then(function(c){{if(a.dataset.act==='print')printCanvas(c);else zpl(c,it.dataset.s+(o.date?'-'+o.date:''))}})}});
-$('q').addEventListener('input',function(){{var v=this.value.toLowerCase().trim().split(/\\s+/);
-document.querySelectorAll('.it').forEach(function(d){{var t=d.dataset.q;d.style.display=v.every(function(w){{return t.indexOf(w)>=0}})?'':'none'}})}});
+var TAB='';
+function filt(){{var v=$('q').value.toLowerCase().trim().split(/\\s+/);
+document.querySelectorAll('.it').forEach(function(d){{var t=d.dataset.q;d.style.display=(!TAB||d.dataset.c===TAB)&&v.every(function(w){{return t.indexOf(w)>=0}})?'':'none'}});
+document.querySelectorAll('.grp').forEach(function(g){{g.style.display=[].some.call(g.querySelectorAll('.it'),function(d){{return d.style.display!=='none'}})?'':'none'}})}}
+$('q').addEventListener('input',filt);
+$('tabs').addEventListener('click',function(ev){{var b=ev.target.closest('.tab');if(!b)return;TAB=b.dataset.t;
+[].forEach.call(this.children,function(x){{x.classList.toggle('on',x===b)}});try{{localStorage.setItem('etk-tab',TAB)}}catch(e){{}}filt()}});
+try{{var st=localStorage.getItem('etk-tab');if(st){{var bb=document.querySelector('.tab[data-t="'+st+'"]');if(bb)bb.click()}}}}catch(e){{}}
 </script></body></html>"""
     open(os.path.join(sitedir, 'index.html'), 'w').write(page)
 
