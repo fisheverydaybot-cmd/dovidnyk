@@ -99,8 +99,11 @@ def layout(l, body=17):
     paras = [merged]
     if l['salt']:
         paras.append([('Ступінь солоності: ' + l['salt'] + '.', False)])
-    lo, hi = l['t']
-    paras.append([(f'Зберігати при t від {deg(lo)} до {deg(hi)} °C. Термін придатності {l["term"].rstrip(".")}.', False)])
+    if isinstance(l['t'], str):      # складні умови зберігання — готовим текстом
+        paras.append([(l['t'].rstrip('.') + '.', False)])
+    else:
+        lo, hi = l['t']
+        paras.append([(f'Зберігати при t від {deg(lo)} до {deg(hi)} °C. Термін придатності {l["term"].rstrip(".")}.', False)])
     b = str(l['b']).replace('.', ',')
     paras.append([(f'Поживна цінність 100 г: білки {b} г, жири {l["f"]} г.', False)])
     paras.append([(f'Енергетична цінність 100 г: {l["kcal"]} ккал / {round(l["kcal"] * 4.184)} кДж.', False)])
