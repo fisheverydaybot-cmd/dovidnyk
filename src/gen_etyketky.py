@@ -120,9 +120,9 @@ def layout(l, body=17):
     fs = body - 1
     fl = fs + 1
     bottom = [
-        ('field', 'Маса нетто', 'кг'),
-        ('field', 'Дата виготовлення', ''),
-        ('field', 'Партія №', ''),
+        ('field', 'Маса нетто', 'кг', 'mass'),
+        ('field', 'Дата виготовлення', '', 'date'),
+        ('field', 'Партія №', '', 'batch'),
         ('text', [('Виробник: ', False), (E.OPERATOR, True)]),
         ('text', [(E.ADDRESS, False)]),
         ('text', [('тел. ' + E.PHONE + '      без ГМО', False)]),
@@ -132,13 +132,15 @@ def layout(l, body=17):
         return None
     for it in bottom:
         if it[0] == 'field':
-            _, lab, unit = it
+            _, lab, unit, key = it
             ops.append(('text', M, by, fs, [(lab, False)]))
             x1 = M + tw([(lab, False)], fs) + 4
             x2 = left - (tw([(unit, False)], fs) + 4 if unit else 0)
             if unit:
                 ops.append(('text', x2 + 4, by, fs, [(unit, False)]))
             ops.append(('rule', x1, x2, by + 1))
+            # місце для змінного значення (дата, партія, маса), яке вписує сторінка друку
+            ops.append(('slot', key, round(x1), round(x2), round(by), fs))
         else:
             segs = it[1]
             s = fs
@@ -235,6 +237,7 @@ def main(out):
     gx, gy = (210 * mm - cols * W * PT) / (cols + 1), (297 * mm - rows_ * H * PT) / (rows_ + 1)
     for i, l in enumerate(E.LABELS):
         ops = fit(l)
+        l['_slots'] = {o[1]: list(o[2:]) for o in ops if o[0] == 'slot'}
         name = l['file'].strip().replace('  ', ' ')
         im = render_png(ops)
         im.save(os.path.join(out, 'png', name + '.png'))
@@ -265,11 +268,17 @@ input{width:100%;font:inherit;padding:11px 13px;border:1px solid #a8d8b9;border-
 .it b{display:block;line-height:1.3}.it small{color:#5b6873}
 .it a{display:inline-block;margin:6px 6px 0 0;padding:7px 12px;border-radius:9px;background:#2e8b57;color:#fff;text-decoration:none;font-weight:600;font-size:15px}
 .it a.z{background:#e9f6ee;color:#1d5c3a}
+.vars{background:#fff;border:2px solid #2e8b57;border-radius:12px;padding:10px 14px;margin-bottom:12px}
+.row3{display:grid;grid-template-columns:repeat(3,1fr);gap:10px}.vars label{font-size:14px;font-weight:600;color:#1d5c3a}
+.vars input{margin:4px 0 0}.vars .chk{display:flex;gap:8px;align-items:center;font-weight:400;color:#1d2730}.vars .chk input{width:auto;margin:0}
+.tip{font-size:13px;color:#5b6873;margin:6px 0 0}
+@media(max-width:520px){.row3{grid-template-columns:1fr}}
 @media(max-width:520px){.it{flex-direction:column;align-items:flex-start}.it img{width:100%}}"""
 
 
 def site(sitedir, labels):
-    """Сторінка «Етикетки» в довіднику цеху: пошук, перегляд, PDF для друку, ZPL."""
+    """Сторінка «Етикетки» в довіднику цеху: пошук, змінні дата/партія/маса, друк на Zebra, PDF, ZPL."""
+    import json
     e = html.escape
     for sub in ('pdf', 'zpl', 'png'):
         os.makedirs(os.path.join(sitedir, sub), exist_ok=True)
@@ -279,29 +288,60 @@ def site(sitedir, labels):
         for sub, ext in (('pdf', 'pdf'), ('zpl', 'zpl'), ('png', 'png')):
             shutil.copy(os.path.join(src, sub, l['_name'] + '.' + ext), os.path.join(sitedir, sub, slug + '.' + ext))
         title = ' '.join(l['title'])
-        items.append(f'<div class="it" data-q="{e(title.lower())}"><img src="png/{slug}.png" alt="" loading="lazy"><div><b>{e(title)}</b>'
-                     f'<small>{e(l["std"])} · {e(l["term"])}</small><br><a href="#" onclick="return pr(\'png/{slug}.png\')">🖨 Друкувати на Zebra</a>'
-                     f'<a class="z" href="pdf/{slug}.pdf" target="_blank">PDF</a>'
-                     f'<a class="z" href="zpl/{slug}.zpl" download>ZPL</a></div></div>')
+        items.append(f'<div class="it" data-q="{e(title.lower())}" data-s="{slug}" data-f=\'{json.dumps(l["_slots"])}\'>'
+                     f'<img src="png/{slug}.png" alt="" loading="lazy"><div><b>{e(title)}</b>'
+                     f'<small>{e(l["std"])} · {e(l["term"])}</small><br>'
+                     f'<a href="#" data-act="print">🖨 Друкувати на Zebra</a>'
+                     f'<a class="z" href="#" data-act="zpl">ZPL з датою</a>'
+                     f'<a class="z" href="pdf/{slug}.pdf" target="_blank">PDF без дати</a></div></div>')
     page = f"""<!DOCTYPE html><html lang="uk"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Етикетки · Цех · Риба Щодня</title><meta name="theme-color" content="#2e8b57"><style>{SITE_CSS}</style></head><body>
-<header><a href="../">🐟 НАССР · Цех</a><small>Етикетки для принтера Zebra LP 2824 Plus</small></header><main>
-<h1>Етикетки</h1><div class="how"><p><b>Як надрукувати:</b> знайдіть товар і натисніть «🖨 Друкувати на Zebra». У вікні друку виберіть принтер
-<b>ZDesigner LP 2824 Plus</b>, поля — «Немає», масштаб — <b>100 %</b>, і вкажіть кількість копій (скільки етикеток потрібно).
-Розмір етикетки 57×41 мм підставляється сам.</p>
-<p>Якщо браузер друкує не той розмір — відкрийте «PDF» і друкуйте з нього з масштабом «Фактичний розмір».</p>
-<p>Після друку впишіть ручкою масу нетто, дату виготовлення і номер партії.</p>
-<p>ZPL — для друку напряму на принтер через Zebra Setup Utilities («Send file»).</p></div>
+<header><a href="../">🐟 НАССР · Цех</a><small>Етикетки для принтера Zebra</small></header><main>
+<h1>Етикетки</h1>
+<div class="vars"><div class="row3">
+<label>Дата виготовлення<input id="vDate" type="date"></label>
+<label>Партія №<input id="vBatch" type="text" maxlength="14" placeholder="напр. 245"></label>
+<label>Маса нетто, кг<input id="vMass" type="text" inputmode="decimal" maxlength="7" placeholder="можна порожньо"></label>
+</div><label class="chk"><input id="vBlank" type="checkbox"> Друкувати без дати (порожні рядки, вписати ручкою)</label>
+<p class="tip">Дата, партія і маса друкуються прямо на етикетці. Перевірте їх перед друком — вони однакові для всіх етикеток, які друкуєте зараз.</p></div>
+<div class="how"><p><b>Як надрукувати:</b> заповніть дату (і партію), знайдіть товар і натисніть «🖨 Друкувати на Zebra». У вікні друку виберіть принтер
+<b>ZDesigner…</b>, поля — «Немає», масштаб — <b>100 %</b>, і вкажіть кількість копій.</p>
+<p>«ZPL з датою» — файл з уже вписаною датою, для друку напряму через Zebra Setup Utilities («Send file»).</p></div>
 <input id="q" type="search" placeholder="Пошук: оселедець, скумбрія, товстолоб…" autocomplete="off">
 <div id="list">{''.join(items)}</div>
 <p class="note" style="font-size:13px;color:#5b6873">Етикеток: {len(labels)}. Виробник ТОВ «ФІШ-МАКСИМУМ ТРЕЙД». Щоб змінити текст етикетки — напишіть, хто веде довідник (дані в src/etyketky.py).</p>
 </main><script>
-function pr(src){{var f=document.getElementById('pf');if(f)f.remove();f=document.createElement('iframe');f.id='pf';
+var W={W},H={H};
+function $(i){{return document.getElementById(i)}}
+(function(){{var d=new Date();d=new Date(d-d.getTimezoneOffset()*6e4);$('vDate').value=d.toISOString().slice(0,10);
+try{{var b=localStorage.getItem('etk-batch');if(b)$('vBatch').value=b}}catch(e){{}}
+$('vBatch').addEventListener('change',function(){{try{{localStorage.setItem('etk-batch',this.value)}}catch(e){{}}}});}})();
+function vals(){{if($('vBlank').checked)return {{}};var v=$('vDate').value,o={{}};
+if(v){{var p=v.split('-');o.date=p[2]+'.'+p[1]+'.'+p[0]}}
+var b=$('vBatch').value.trim();if(b)o.batch=b;var m=$('vMass').value.trim().replace('.',',');if(m)o.mass=m;return o}}
+function check(o){{if($('vBlank').checked)return true;if(!o.date){{alert('Вкажіть дату виготовлення');$('vDate').focus();return false}}return true}}
+function loadImg(src){{return new Promise(function(ok,no){{var i=new Image();i.onload=function(){{ok(i)}};i.onerror=no;i.src=src}})}}
+function render(it,o){{return loadImg('png/'+it.dataset.s+'.png').then(function(im){{
+var c=document.createElement('canvas');c.width=W;c.height=H;var x=c.getContext('2d');x.drawImage(im,0,0);
+var f=JSON.parse(it.dataset.f);x.fillStyle='#000';x.textBaseline='alphabetic';
+Object.keys(o).forEach(function(k){{var s=f[k];if(!s)return;var x1=s[0],x2=s[1],y=s[2],fs=s[3]+2,t=o[k];
+var sz=fs;do{{x.font='bold '+sz+'px Arial, sans-serif';sz--}}while(x.measureText(t).width>x2-x1-6&&sz>10);
+x.fillText(t,x1+4,y-1)}});
+var d=x.getImageData(0,0,W,H),a=d.data;for(var i=0;i<a.length;i+=4){{var v=(a[i]+a[i+1]+a[i+2])/3<150?0:255;a[i]=a[i+1]=a[i+2]=v;a[i+3]=255}}
+x.putImageData(d,0,0);return c}})}}
+function printCanvas(c){{var u=c.toDataURL('image/png');var f=$('pf');if(f)f.remove();f=document.createElement('iframe');f.id='pf';
 f.style.cssText='position:fixed;width:0;height:0;border:0;right:0;bottom:0';document.body.appendChild(f);
 var d=f.contentWindow.document;d.open();d.write('<!DOCTYPE html><html><head><style>@page{{size:57.3mm 41mm;margin:0}}html,body{{margin:0;padding:0}}'+
-'img{{display:block;width:57.3mm;height:41mm;image-rendering:pixelated}}</style></head><body><img src="'+new URL(src,location.href).href+'"></body></html>');d.close();
-var im=d.querySelector('img');var go=function(){{f.contentWindow.focus();f.contentWindow.print()}};if(im.complete)go();else im.onload=go;return false}}
-document.getElementById('q').addEventListener('input',function(){{var v=this.value.toLowerCase().trim().split(/\\s+/);
+'img{{display:block;width:57.3mm;height:41mm;image-rendering:pixelated}}</style></head><body><img src="'+u+'"></body></html>');d.close();
+var im=d.querySelector('img');var go=function(){{f.contentWindow.focus();f.contentWindow.print()}};if(im.complete)go();else im.onload=go}}
+function zpl(c,name){{var d=c.getContext('2d').getImageData(0,0,W,H).data,bpr=Math.ceil(W/8),h='',r,b,k,v,xx;
+for(r=0;r<H;r++){{for(b=0;b<bpr;b++){{v=0;for(k=0;k<8;k++){{xx=b*8+k;v=(v<<1)|(xx<W&&d[(r*W+xx)*4]<128?1:0)}}h+=(v<16?'0':'')+v.toString(16).toUpperCase()}}h+='\\n'}}
+var n=bpr*H,z='^XA\\n^PW'+W+'\\n^LL'+H+'\\n^LH0,0\\n^FO0,0^GFA,'+n+','+n+','+bpr+',\\n'+h+'^FS\\n^PQ1\\n^XZ\\n';
+var a=document.createElement('a');a.href=URL.createObjectURL(new Blob([z],{{type:'text/plain'}}));a.download=name+'.zpl';document.body.appendChild(a);a.click();a.remove()}}
+document.getElementById('list').addEventListener('click',function(ev){{var a=ev.target.closest('[data-act]');if(!a)return;ev.preventDefault();
+var it=a.closest('.it'),o=vals();if(!check(o))return;
+render(it,o).then(function(c){{if(a.dataset.act==='print')printCanvas(c);else zpl(c,it.dataset.s+(o.date?'-'+o.date:''))}})}});
+$('q').addEventListener('input',function(){{var v=this.value.toLowerCase().trim().split(/\\s+/);
 document.querySelectorAll('.it').forEach(function(d){{var t=d.dataset.q;d.style.display=v.every(function(w){{return t.indexOf(w)>=0}})?'':'none'}})}});
 </script></body></html>"""
     open(os.path.join(sitedir, 'index.html'), 'w').write(page)
