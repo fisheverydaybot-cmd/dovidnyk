@@ -19,7 +19,7 @@ h1{font-size:26px;line-height:1.25;margin:4px 0 2px}h2{font-size:15px;text-trans
 .row{padding:12px 0;border-bottom:1px solid #edf1f3}.row:last-child{border-bottom:0}
 .k{font-size:13px;text-transform:uppercase;letter-spacing:.04em;color:#0b5d7a;font-weight:700;margin-bottom:2px}
 table{border-collapse:collapse;width:100%}td{padding:6px 0;border-bottom:1px solid #edf1f3}td:last-child{text-align:right;font-weight:600}
-.note{font-size:13px;color:#5b6873}.ph{margin:12px 0}.ph img{width:100%;height:auto;border-radius:14px;display:block;background:#dde5e9}.ph figcaption{font-size:13px;color:#5b6873;margin-top:4px}.pp{margin:0 0 10px;text-align:center}.pp img{max-width:100%;width:240px;height:auto;border-radius:12px;display:inline-block;background:#dde5e9}.pp figcaption{font-size:13px;color:#5b6873;margin-top:4px}.alg{background:#fff4dc;border-radius:10px;padding:10px 12px}
+.note{font-size:13px;color:#5b6873}.ph{margin:12px 0}.ph img{width:100%;height:auto;border-radius:14px;display:block;background:#dde5e9}.ph figcaption{font-size:13px;color:#5b6873;margin-top:4px}.pp{margin:4px 0 10px;text-align:center}.pp img{max-width:100%;width:320px;height:auto;border-radius:12px;display:inline-block;background:#dde5e9}.pp figcaption{font-size:13px;color:#5b6873;margin-top:4px}.alg{background:#fff4dc;border-radius:10px;padding:10px 12px}
 ul.list{list-style:none;padding:0}ul.list a{display:block;background:#fff;border:1px solid #d7dee3;border-radius:12px;padding:13px 14px;margin-bottom:8px;color:#1d2730;text-decoration:none;font-weight:600}
 ul.list small{display:block;font-weight:400;color:#5b6873}
 .sheet{display:grid;grid-template-columns:repeat(4,1fr);gap:4mm}.lbl{border:1px dashed #999;border-radius:6px;padding:3mm;text-align:center;break-inside:avoid;background:#fff}
@@ -55,7 +55,7 @@ def nutr_table(p):
     return t + f'</table><p class="note">{note}</p>'
 
 def prod_photo(pid):
-    # невелике фото готового продукту: p/img/prod/<id продукту>.jpg, показується вгорі «Про продукт»
+    # фото готового продукту: p/img/prod/<id продукту>.jpg, показується одразу під назвою
     for ext in ('jpg', 'jpeg', 'png', 'webp'):
         fn = f'{out}/p/img/prod/{pid}.{ext}'
         if os.path.exists(fn):
@@ -86,7 +86,7 @@ for p in P:
     more = ('<ul class="list">' + ''.join(f'<li><a href="../{o["id"]}/">{e(o["name"])}</a></li>' for o in same) + '</ul>') if same else ''
     # порядок: продукт → про рибу (опис) → фото сировини (фото внизу, щоб не плутали з готовим продуктом)
     body = (f'<h1>{e(p["name"])}</h1><p class="lat">{e(fi["name"])} · {e(fi["latin"])}</p>'
-            '<h2>Про продукт</h2><div class="card">' + prod_photo(p['id']) +
+            + prod_photo(p['id']) + '<h2>Про продукт</h2><div class="card">' +
             row('Що це', f'<div>{e(p["category"])}</div>') +
             row('Як виготовлено', f'<div>{e(p["method"])}</div>') +
             (row('Гаряче чи холодне копчення?', SMOKE[p['smoke']]) if p.get('smoke') else '') +
