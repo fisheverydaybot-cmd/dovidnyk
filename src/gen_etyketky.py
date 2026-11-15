@@ -21,6 +21,7 @@ DPI = 203
 W, H = 458, 328          # точки принтера: 57,3 × 41 мм (розмір з файлів ZebraDesigner)
 M = 9                    # поле
 QM = 3                   # розмір модуля QR у точках (0,375 мм)
+LIFT = 20                # нижній блок і QR підняті на 2,5 мм від краю (на ZD230 низ виходив впритул)
 FONTS = {False: '/usr/share/fonts/truetype/crosextra/Carlito-Regular.ttf',
          True: '/usr/share/fonts/truetype/crosextra/Carlito-Bold.ttf'}
 _fc = {}
@@ -115,7 +116,7 @@ def layout(l, body=17):
     q = segno.make(BASE + l['id'] + '/', error='m')
     mat = [list(r) for r in q.matrix_iter(border=0)]
     qs = len(mat) * QM
-    qx, qy = W - M - qs, H - M - qs + 2
+    qx, qy = W - M - qs, H - M - LIFT - qs + 2
     ops.append(('qr', qx, qy, mat))
     cap = l.get('cap', 'Про рибу')
     ops.append(('text', qx + (qs - tw([(cap, True)], 14)) / 2, qy - 4, 14, [(cap, True)]))
@@ -130,7 +131,7 @@ def layout(l, body=17):
         ('text', [(E.ADDRESS, False)]),
         ('text', [('тел. ' + E.PHONE + '      без ГМО', False)]),
     ]
-    by = H - M - len(bottom) * fl + fs - 2
+    by = H - M - LIFT - len(bottom) * fl + fs - 2
     if by - fs < y + 2 or qy - 18 < y:
         return None
     for it in bottom:
