@@ -167,7 +167,7 @@ def bottom_block(l, ops, y, body):
     left = qx - M - 10
     if l.get('pack'):
         # nomass: вагу друкують ваги CAS — рядка ваги на етикетці немає
-        top = ([] if l.get('nomass') else [('text', [('Вага нетто 200 г ± 5 %', False)])]) + [('field', 'Дата пакування', '', 'date')]
+        top = ([] if l.get('nomass') else [('text', [('Вага нетто 200 г ± 5 %', False)])]) + [('field', 'Дата пакування', '', 'date'), ('field', 'Вжити до', '', 'until')]
     else:
         top = [('field', 'Маса нетто', 'кг', 'mass'), ('field', 'Дата виготовлення', '', 'date')]
     bottom = top + [
@@ -394,6 +394,10 @@ def site(sitedir, labels):
 <label>Дата виготовлення<input id="vDate" type="date"></label>
 <label>Партія №<input id="vBatch" type="text" maxlength="14" placeholder="напр. 245"></label>
 <label>Маса нетто, кг<input id="vMass" type="text" inputmode="decimal" maxlength="7" placeholder="можна порожньо"></label>
+</div><div class="row3" style="margin-top:8px">
+<label>Час пакування (фасовка)<input id="vTime" type="time"></label>
+<label>Вжити до (фасовка)<input id="vUntil" type="text" maxlength="18"></label>
+<span class="tip" style="align-self:end">Рахується саме: дата і час пакування + 72 год. Якщо строк партії закінчується раніше — виправте вручну.</span>
 </div><label class="chk"><input id="vBlank" type="checkbox"> Друкувати без дати (порожні рядки, вписати ручкою)</label>
 <p class="tip">Дата, партія і маса друкуються прямо на етикетці. Перевірте їх перед друком — вони однакові для всіх етикеток, які друкуєте зараз.</p></div>
 <div class="how"><p><b>Як надрукувати:</b> заповніть дату (і партію), знайдіть товар і натисніть «🖨 Друкувати на Zebra». У вікні друку виберіть принтер
@@ -408,10 +412,15 @@ def site(sitedir, labels):
 function $(i){{return document.getElementById(i)}}
 (function(){{var d=new Date();d=new Date(d-d.getTimezoneOffset()*6e4);$('vDate').value=d.toISOString().slice(0,10);
 try{{var b=localStorage.getItem('etk-batch');if(b)$('vBatch').value=b}}catch(e){{}}
+var t0=new Date();$('vTime').value=('0'+t0.getHours()).slice(-2)+':'+('0'+t0.getMinutes()).slice(-2);
+function calcUntil(){{var v=$('vDate').value,t=$('vTime').value||'00:00';if(!v){{$('vUntil').value='';return}}var p=v.split('-'),q=t.split(':');
+var d=new Date(+p[0],+p[1]-1,+p[2],+q[0],+q[1]);d=new Date(d.getTime()+72*3600e3);
+$('vUntil').value=('0'+d.getDate()).slice(-2)+'.'+('0'+(d.getMonth()+1)).slice(-2)+'.'+d.getFullYear()+' '+('0'+d.getHours()).slice(-2)+':'+('0'+d.getMinutes()).slice(-2)}}
+$('vDate').addEventListener('change',calcUntil);$('vTime').addEventListener('change',calcUntil);calcUntil();
 $('vBatch').addEventListener('change',function(){{try{{localStorage.setItem('etk-batch',this.value)}}catch(e){{}}}});}})();
 function vals(){{if($('vBlank').checked)return {{}};var v=$('vDate').value,o={{}};
 if(v){{var p=v.split('-');o.date=p[2]+'.'+p[1]+'.'+p[0]}}
-var b=$('vBatch').value.trim();if(b)o.batch=b;var m=$('vMass').value.trim().replace('.',',');if(m)o.mass=m;return o}}
+var u=$('vUntil').value.trim();if(u)o.until=u;var b=$('vBatch').value.trim();if(b)o.batch=b;var m=$('vMass').value.trim().replace('.',',');if(m)o.mass=m;return o}}
 function check(o){{if($('vBlank').checked)return true;if(!o.date){{alert('Вкажіть дату виготовлення');$('vDate').focus();return false}}return true}}
 function loadImg(src){{return new Promise(function(ok,no){{var i=new Image();i.onload=function(){{ok(i)}};i.onerror=no;i.src=src}})}}
 function render(it,o){{return loadImg('png/'+it.dataset.s+'.png').then(function(im){{
