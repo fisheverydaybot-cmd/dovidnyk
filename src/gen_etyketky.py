@@ -19,6 +19,12 @@ BASE = 'https://fisheverydaybot-cmd.github.io/dovidnyk/p/'
 
 DPI = 203
 W, H = 458, 328          # точки принтера: 57,3 × 41 мм (розмір з файлів ZebraDesigner)
+SIZES = {False: (458, 328), True: (448, 406)}   # True — фасовка 200 г: 56 × 50,75 мм (як у файлах .prn фасовки)
+
+
+def set_size(l):
+    global W, H
+    W, H = SIZES[bool(l.get('pack'))]
 M = 9                    # поле
 QM = 3                   # розмір модуля QR у точках (0,375 мм)
 LIFT = 12  # 1,5 мм вгору від низу (8 точок = 1 мм)
@@ -72,16 +78,30 @@ def layout(l, body=17):
     full = W - 2 * M
     # назва
     ts = 25
-    while max(tw([(t, True)], ts) for t in l['title']) > full and ts > 18:
+    titles = l['title']
+    while max(tw([(t, True)], ts) for t in titles) > full and ts > 18:
         ts -= 1
-    for t in l['title']:
+    if max(tw([(t, True)], ts) for t in titles) > full:
+        ts = 22
+        titles = [''.join(x for x, _ in ln) for ln in wrap([(' '.join(l['title']), True)], ts, full)]
+        while len(titles) > 2 and ts > 18:
+            ts -= 1
+            titles = [''.join(x for x, _ in ln) for ln in wrap([(' '.join(l['title']), True)], ts, full)]
+    for t in titles:
         y += ts - 3
         ops.append(('text', (W - tw([(t, True)], ts)) / 2, y, ts, [(t, True)]))
     y += 3
     # стандарт
-    y += body
-    ops.append(('text', (W - tw([(l['std'], False)], body)) / 2, y, body, [(l['std'], False)]))
+    if l['std']:
+        y += body
+        ops.append(('text', (W - tw([(l['std'], False)], body)) / 2, y, body, [(l['std'], False)]))
     lh = body + 1
+    if l.get('paras') is not None:      # етикетка іншого виробника — текст як є
+        for ptxt in l['paras']:
+            for ln in wrap([(ptxt, False)], body, full):
+                y += lh
+                ops.append(('text', M, y, body, ln))
+        return bottom_block(l, ops, y, body)
     fish, rest = l['comp'].split(',', 1) if ',' in l['comp'] else (l['comp'], '')
     comp = [('Склад: ', False), (fish, True)]
     if rest:
@@ -112,7 +132,31 @@ def layout(l, body=17):
         for ln in wrap(p, body, full):
             y += lh
             ops.append(('text', M, y, body, ln))
+    return bottom_block(l, ops, y, body)
+
+
+def bottom_block(l, ops, y, body):
     # нижній блок: ліворуч поля і виробник, праворуч QR
+    fs = body - 1
+    fl = fs + 1
+    if l.get('qr') is False:
+        left = W - M
+        bottom = []
+        if l.get('mass'):
+            bottom.append(('text', [('Маса нетто: ' + l['mass'], False)]))
+        else:
+            bottom.append(('field', 'Маса нетто', 'кг', 'mass'))
+        bottom.append(('field', 'Дата виробництва', '', 'date'))
+        for ln in wrap([(l['op'], True)], fs, left - M):
+            bottom.append(('text', ln))
+        for ln in wrap([(l['addr'], False)], fs, left - M):
+            bottom.append(('text', ln))
+        if l.get('gmo'):
+            bottom.append(('text', [('без ГМО', False)]))
+        by = H - M - LIFT - len(bottom) * fl + fs - 2
+        if by - fs < y + 2:
+            return None
+        return draw_bottom(ops, bottom, by, fs, fl, left)
     q = segno.make(BASE + l['id'] + '/', error='m')
     mat = [list(r) for r in q.matrix_iter(border=0)]
     qs = len(mat) * QM
@@ -121,19 +165,23 @@ def layout(l, body=17):
     cap = l.get('cap', 'Про рибу')
     ops.append(('text', qx + (qs - tw([(cap, True)], 14)) / 2, qy - 4, 14, [(cap, True)]))
     left = qx - M - 10
-    fs = body - 1
-    fl = fs + 1
-    bottom = [
-        ('field', 'Маса нетто', 'кг', 'mass'),
-        ('field', 'Дата виготовлення', '', 'date'),
+    if l.get('pack'):
+        top = [('text', [('Вага нетто 200 г ± 5 %', False)]), ('field', 'Дата пакування', '', 'date')]
+    else:
+        top = [('field', 'Маса нетто', 'кг', 'mass'), ('field', 'Дата виготовлення', '', 'date')]
+    bottom = top + [
         ('field', 'Партія №', '', 'batch'),
-        ('text', [('Виробник: ', False), (E.OPERATOR, True)]),
-        ('text', [(E.ADDRESS, False)]),
-        ('text', [('тел. ' + E.PHONE + '      без ГМО', False)]),
+        ('text', [('Виробник: ', False), (l.get('op', E.OPERATOR), True)]),
+        ('text', [(l.get('addr', E.ADDRESS), False)]),
+        ('text', [('тел. ' + l.get('phone', E.PHONE) + '      без ГМО', False)]),
     ]
     by = H - M - LIFT - len(bottom) * fl + fs - 2
     if by - fs < y + 2 or qy - 18 < y:
         return None
+    return draw_bottom(ops, bottom, by, fs, fl, left)
+
+
+def draw_bottom(ops, bottom, by, fs, fl, left):
     for it in bottom:
         if it[0] == 'field':
             _, lab, unit, key = it
@@ -156,7 +204,7 @@ def layout(l, body=17):
 
 
 def fit(l):
-    for body in (20, 19, 18, 17, 16, 15, 14, 13):
+    for body in (20, 19, 18, 17, 16, 15, 14, 13, 12, 11):
         ops = layout(l, body)
         if ops:
             return ops
@@ -237,9 +285,11 @@ def main(out):
     allc.setTitle('Етикетки ТОВ «ФІШ-МАКСИМУМ ТРЕЙД»')
     a4 = canvas.Canvas(os.path.join(out, 'zrazky-A4.pdf'), pagesize=(210 * mm, 297 * mm))
     a4.setTitle('Етикетки — огляд на A4')
-    cols, rows_ = 3, 6
-    gx, gy = (210 * mm - cols * W * PT) / (cols + 1), (297 * mm - rows_ * H * PT) / (rows_ + 1)
+    cols, rows_ = 3, 5
+    CW, CH = 458, 406
+    gx, gy = (210 * mm - cols * CW * PT) / (cols + 1), (297 * mm - rows_ * CH * PT) / (rows_ + 1)
     for i, l in enumerate(E.LABELS):
+        set_size(l)
         ops = fit(l)
         l['_slots'] = {o[1]: list(o[2:]) for o in ops if o[0] == 'slot'}
         name = l['file'].strip().replace('  ', ' ')
@@ -248,12 +298,12 @@ def main(out):
         open(os.path.join(out, 'zpl', name + '.zpl'), 'w', encoding='ascii').write(zpl(im))
         c = canvas.Canvas(os.path.join(out, 'pdf', name + '.pdf'), pagesize=(W * PT, H * PT))
         c.setTitle(name); draw_pdf(c, ops); c.showPage(); c.save()
-        draw_pdf(allc, ops); allc.showPage()
+        allc.setPageSize((W * PT, H * PT)); draw_pdf(allc, ops); allc.showPage()
         k = i % (cols * rows_)
         if i and k == 0:
             a4.showPage()
-        cx = gx + (k % cols) * (W * PT + gx)
-        cy = 297 * mm - (k // cols + 1) * (H * PT + gy)
+        cx = gx + (k % cols) * (CW * PT + gx)
+        cy = 297 * mm - (k // cols + 1) * (CH * PT + gy) + (CH - H) * PT
         a4.setLineWidth(0.3); a4.setStrokeGray(0.6)
         a4.roundRect(cx, cy, W * PT, H * PT, 2 * mm, stroke=1, fill=0)
         a4.setStrokeGray(0)
@@ -284,8 +334,10 @@ input{width:100%;font:inherit;padding:11px 13px;border:1px solid #a8d8b9;border-
 
 
 # Групи на сторінці друку. Порядок = порядок вкладок. Етикетці можна задати групу вручну: поле 'cat' у src/etyketky.py.
-CATS = [('sol', 'Солона'), ('pryan', 'Пряного і спецпосолу'), ('mar', 'Мариновані, в олії, в заливці'),
-        ('hk', 'Гарячого копчення'), ('khk', 'Холодного копчення'), ('vyal', 'Вʼялена і сушена'), ('moroz', 'Морожена')]
+CATS = [('sol', 'Солона'), ('pryan', 'Пряного і спецпосолу'), ('mar', 'Мариновані, в олії, в соусі'),
+        ('hk', 'Гарячого копчення'), ('khk', 'Холодного копчення'), ('vyal', 'Вʼялена'), ('rulet', 'Рулети, ковбаси, шинки'),
+        ('fas', 'Фасовка 200 г'), ('sylno', 'Сильносолена морожена (напівфабрикат)'), ('mm', 'Морська морожена (напівфабрикат)'),
+        ('mr', 'Річкова морожена (напівфабрикат)'), ('moroz', 'Морожена'), ('inshi', 'Інші виробники')]
 
 
 def cat(l):
@@ -315,13 +367,14 @@ def site(sitedir, labels):
         os.makedirs(os.path.join(sitedir, sub), exist_ok=True)
     items = []
     for i, (l, src) in enumerate(labels):
-        slug = f'{i + 1:02d}-{l["id"]}'
+        set_size(l)
+        slug = f'{i + 1:02d}-{l["id"] or "inshi"}'
         for sub, ext in (('pdf', 'pdf'), ('zpl', 'zpl'), ('png', 'png')):
             shutil.copy(os.path.join(src, sub, l['_name'] + '.' + ext), os.path.join(sitedir, sub, slug + '.' + ext))
         title = ' '.join(l['title'])
-        items.append((cat(l), f'<div class="it" data-c="{cat(l)}" data-q="{e(title.lower())}" data-s="{slug}" data-f=\'{json.dumps(l["_slots"])}\'>'
+        items.append((cat(l), f'<div class="it" data-c="{cat(l)}" data-q="{e(title.lower())}" data-s="{slug}" data-w="{W}" data-h="{H}" data-f=\'{json.dumps(l["_slots"])}\'>'
                      f'<img src="png/{slug}.png" alt="" loading="lazy"><div><b>{e(title)}</b>'
-                     f'<small>{e(l["std"])} · {e(l["term"])}</small><br>'
+                     f'<small>{e(l["std"])}{" · " + e(l["term"]) if l.get("term") else ""}{" · " + e(l["op"]) if l.get("op") else ""}</small><br>'
                      f'<a href="#" data-act="print">🖨 Друкувати на Zebra</a>'
                      f'<a class="z" href="#" data-act="zpl">ZPL з датою</a>'
                      f'<a class="z" href="pdf/{slug}.pdf" target="_blank">PDF без дати</a></div></div>'))
@@ -343,14 +396,14 @@ def site(sitedir, labels):
 </div><label class="chk"><input id="vBlank" type="checkbox"> Друкувати без дати (порожні рядки, вписати ручкою)</label>
 <p class="tip">Дата, партія і маса друкуються прямо на етикетці. Перевірте їх перед друком — вони однакові для всіх етикеток, які друкуєте зараз.</p></div>
 <div class="how"><p><b>Як надрукувати:</b> заповніть дату (і партію), знайдіть товар і натисніть «🖨 Друкувати на Zebra». У вікні друку виберіть принтер
-<b>ZDesigner…</b>, поля — «Немає», масштаб — <b>100 %</b>, і вкажіть кількість копій.</p>
+<b>ZDesigner…</b>, поля — «Немає», масштаб — <b>100 %</b>, і вкажіть кількість копій.
+Фасовка 200 г друкується на етикетці 56 × 51 мм — перед друком вставте в принтер цей рулон.</p>
 <p>«ZPL з датою» — файл з уже вписаною датою, для друку напряму через Zebra Setup Utilities («Send file»).</p></div>
 <div class="tabs" id="tabs">{''.join(tabs)}</div>
 <input id="q" type="search" placeholder="Пошук: оселедець, скумбрія, товстолоб…" autocomplete="off">
 <div id="list">{''.join(groups)}</div>
-<p class="note" style="font-size:13px;color:#5b6873">Етикеток: {len(labels)}. Виробник ТОВ «ФІШ-МАКСИМУМ ТРЕЙД». Щоб змінити текст етикетки — напишіть, хто веде довідник (дані в src/etyketky.py).</p>
+<p class="note" style="font-size:13px;color:#5b6873">Етикеток: {len(labels)}. Виробник — ТОВ «ФІШ-МАКСИМУМ ТРЕЙД»; морожена і сильносолена — ФОП Каменецький О. Л.; вкладка «Інші виробники» — етикетки постачальників без змін. Щоб змінити текст етикетки — напишіть, хто веде довідник (дані в src/etyketky.py).</p>
 </main><script>
-var W={W},H={H};
 function $(i){{return document.getElementById(i)}}
 (function(){{var d=new Date();d=new Date(d-d.getTimezoneOffset()*6e4);$('vDate').value=d.toISOString().slice(0,10);
 try{{var b=localStorage.getItem('etk-batch');if(b)$('vBatch').value=b}}catch(e){{}}
@@ -361,19 +414,19 @@ var b=$('vBatch').value.trim();if(b)o.batch=b;var m=$('vMass').value.trim().repl
 function check(o){{if($('vBlank').checked)return true;if(!o.date){{alert('Вкажіть дату виготовлення');$('vDate').focus();return false}}return true}}
 function loadImg(src){{return new Promise(function(ok,no){{var i=new Image();i.onload=function(){{ok(i)}};i.onerror=no;i.src=src}})}}
 function render(it,o){{return loadImg('png/'+it.dataset.s+'.png').then(function(im){{
-var c=document.createElement('canvas');c.width=W;c.height=H;var x=c.getContext('2d');x.drawImage(im,0,0);
+var W=im.naturalWidth,H=im.naturalHeight;var c=document.createElement('canvas');c.width=W;c.height=H;var x=c.getContext('2d');x.drawImage(im,0,0);
 var f=JSON.parse(it.dataset.f);x.fillStyle='#000';x.textBaseline='alphabetic';
 Object.keys(o).forEach(function(k){{var s=f[k];if(!s)return;var x1=s[0],x2=s[1],y=s[2],fs=s[3]+2,t=o[k];
 var sz=fs;do{{x.font='bold '+sz+'px Arial, sans-serif';sz--}}while(x.measureText(t).width>x2-x1-6&&sz>10);
 x.fillText(t,x1+4,y-1)}});
 var d=x.getImageData(0,0,W,H),a=d.data;for(var i=0;i<a.length;i+=4){{var v=(a[i]+a[i+1]+a[i+2])/3<150?0:255;a[i]=a[i+1]=a[i+2]=v;a[i+3]=255}}
 x.putImageData(d,0,0);return c}})}}
-function printCanvas(c){{var u=c.toDataURL('image/png');var f=$('pf');if(f)f.remove();f=document.createElement('iframe');f.id='pf';
+function printCanvas(c){{var u=c.toDataURL('image/png'),mw=(c.width*25.4/203).toFixed(1)+'mm',mh=(c.height*25.4/203).toFixed(1)+'mm';var f=$('pf');if(f)f.remove();f=document.createElement('iframe');f.id='pf';
 f.style.cssText='position:fixed;width:0;height:0;border:0;right:0;bottom:0';document.body.appendChild(f);
-var d=f.contentWindow.document;d.open();d.write('<!DOCTYPE html><html><head><style>@page{{size:57.3mm 41mm;margin:0}}html,body{{margin:0;padding:0}}'+
-'img{{display:block;width:57.3mm;height:41mm;image-rendering:pixelated}}</style></head><body><img src="'+u+'"></body></html>');d.close();
+var d=f.contentWindow.document;d.open();d.write('<!DOCTYPE html><html><head><style>@page{{size:'+mw+' '+mh+';margin:0}}html,body{{margin:0;padding:0}}'+
+'img{{display:block;width:'+mw+';height:'+mh+';image-rendering:pixelated}}</style></head><body><img src="'+u+'"></body></html>');d.close();
 var im=d.querySelector('img');var go=function(){{f.contentWindow.focus();f.contentWindow.print()}};if(im.complete)go();else im.onload=go}}
-function zpl(c,name){{var d=c.getContext('2d').getImageData(0,0,W,H).data,bpr=Math.ceil(W/8),h='',r,b,k,v,xx;
+function zpl(c,name){{var W=c.width,H=c.height,d=c.getContext('2d').getImageData(0,0,W,H).data,bpr=Math.ceil(W/8),h='',r,b,k,v,xx;
 for(r=0;r<H;r++){{for(b=0;b<bpr;b++){{v=0;for(k=0;k<8;k++){{xx=b*8+k;v=(v<<1)|(xx<W&&d[(r*W+xx)*4]<128?1:0)}}h+=(v<16?'0':'')+v.toString(16).toUpperCase()}}h+='\\n'}}
 var n=bpr*H,z='^XA\\n^PW'+W+'\\n^LL'+H+'\\n^LH0,0\\n^FO0,0^GFA,'+n+','+n+','+bpr+',\\n'+h+'^FS\\n^PQ1\\n^XZ\\n';
 var a=document.createElement('a');a.href=URL.createObjectURL(new Blob([z],{{type:'text/plain'}}));a.download=name+'.zpl';document.body.appendChild(a);a.click();a.remove()}}
