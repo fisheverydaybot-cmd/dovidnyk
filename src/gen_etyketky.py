@@ -21,7 +21,7 @@ DPI = 203
 W, H = 458, 328          # точки принтера: 57,3 × 41 мм (розмір з файлів ZebraDesigner)
 M = 9                    # поле
 QM = 3                   # розмір модуля QR у точках (0,375 мм)
-LIFT = 20                # нижній блок і QR підняті на 2,5 мм від краю (на ZD230 низ виходив впритул)
+LIFT = 12  # 1,5 мм вгору від низу (8 точок = 1 мм)
 FONTS = {False: '/usr/share/fonts/truetype/crosextra/Carlito-Regular.ttf',
          True: '/usr/share/fonts/truetype/crosextra/Carlito-Bold.ttf'}
 _fc = {}
