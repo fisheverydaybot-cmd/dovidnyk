@@ -33,6 +33,18 @@ FONTS = {False: '/usr/share/fonts/truetype/crosextra/Carlito-Regular.ttf',
 _fc = {}
 
 
+# народні і російські назви для пошуку на сторінці етикеток
+SYN = {'пласт': 'метелик бабочка', 'оселед': 'сельдь селедка', 'товстолоб': 'толстолоб', 'лящ': 'лещ', 'ікр': 'икра',
+       'кілька': 'килька', 'тюлька': 'тюлька', 'вʼял': 'вяленая', 'гарячого копчення': 'г/к гк горячего', 'холодного копчення': 'х/к хк холодного',
+       'солон': 'соленая', 'мойва': 'мойва', 'камбала': 'камбала', 'окунь червоний': 'окунь морской', 'сом ': 'сом', 'щука': 'щука',
+       'ставрида': 'ставрида', 'хребт': 'хребты', 'черевц': 'брюшки', 'фасовка': 'фасованая', 'нерозібран': 'неразделанная', 'патран': 'потрошеная'}
+
+
+def search_q(title):
+    t = title.lower()
+    return ' '.join([t] + [v for k, v in SYN.items() if k in t])
+
+
 def font(size, bold=False):
     k = (size, bold)
     if k not in _fc:
@@ -318,6 +330,7 @@ header{background:#2e8b57;color:#fff;padding:14px 16px}header a{color:#fff;text-
 main{max-width:760px;margin:0 auto;padding:16px 14px 50px}h1{font-size:24px;margin:4px 0 8px}
 .how{background:#fff;border:1px solid #cfe9d8;border-radius:12px;padding:10px 16px;font-size:15px}
 input{width:100%;font:inherit;padding:11px 13px;border:1px solid #a8d8b9;border-radius:10px;margin:12px 0}
+.it[hidden],.grp[hidden],#none[hidden]{display:none!important}
 .it{display:flex;gap:12px;align-items:center;background:#fff;border:1px solid #cfe9d8;border-radius:12px;padding:10px;margin-bottom:8px}
 .it img{width:150px;height:auto;border:1px solid #ddd;border-radius:4px;image-rendering:pixelated;flex:none}
 .it b{display:block;line-height:1.3}.it small{color:#5b6873}
@@ -373,7 +386,7 @@ def site(sitedir, labels):
         for sub, ext in (('pdf', 'pdf'), ('zpl', 'zpl'), ('png', 'png')):
             shutil.copy(os.path.join(src, sub, l['_name'] + '.' + ext), os.path.join(sitedir, sub, slug + '.' + ext))
         title = ' '.join(l['title'])
-        items.append((cat(l), f'<div class="it" data-c="{cat(l)}" data-q="{e(title.lower())}" data-s="{slug}" data-w="{W}" data-h="{H}" data-f=\'{json.dumps(l["_slots"])}\'>'
+        items.append((cat(l), f'<div class="it" data-c="{cat(l)}" data-q="{e(search_q(title))}" data-s="{slug}" data-w="{W}" data-h="{H}" data-f=\'{json.dumps(l["_slots"])}\'>'
                      f'<img src="png/{slug}.png" alt="" loading="lazy"><div><b>{e(title)}</b>'
                      f'<small>{e(l["std"])}{" · " + e(l["term"]) if l.get("term") else ""}{" · " + e(l["op"]) if l.get("op") else ""}</small><br>'
                      f'<a href="#" data-act="print">🖨 Друкувати на Zebra</a>'
@@ -406,7 +419,7 @@ def site(sitedir, labels):
 <p>«ZPL з датою» — файл з уже вписаною датою, для друку напряму через Zebra Setup Utilities («Send file»).</p></div>
 <div class="tabs" id="tabs">{''.join(tabs)}</div>
 <input id="q" type="search" placeholder="Пошук: оселедець, скумбрія, товстолоб…" autocomplete="off">
-<div id="list">{''.join(groups)}</div>
+<div id="list">{''.join(groups)}</div><p id="none" hidden>Нічого не знайдено. Спробуйте інше слово, наприклад лише назву риби.</p>
 <p class="note" style="font-size:13px;color:#5b6873">Етикеток: {len(labels)}. Виробник — ТОВ «ФІШ-МАКСИМУМ ТРЕЙД»; морожена і сильносолена — ФОП Каменецький О. Л.; вкладка «Інші виробники» — етикетки постачальників без змін. Щоб змінити текст етикетки — напишіть, хто веде довідник (дані в src/etyketky.py).</p>
 </main><script>
 function $(i){{return document.getElementById(i)}}
@@ -443,11 +456,16 @@ var a=document.createElement('a');a.href=URL.createObjectURL(new Blob([z],{{type
 document.getElementById('list').addEventListener('click',function(ev){{var a=ev.target.closest('[data-act]');if(!a)return;ev.preventDefault();
 var it=a.closest('.it'),o=vals();if(!check(o))return;
 render(it,o).then(function(c){{if(a.dataset.act==='print')printCanvas(c);else zpl(c,it.dataset.s+(o.date?'-'+o.date:''))}})}});
-var TAB='';
-function filt(){{var v=$('q').value.toLowerCase().trim().split(/\\s+/);
-document.querySelectorAll('.it').forEach(function(d){{var t=d.dataset.q;d.style.display=(!TAB||d.dataset.c===TAB)&&v.every(function(w){{return t.indexOf(w)>=0}})?'':'none'}});
-document.querySelectorAll('.grp').forEach(function(g){{g.style.display=[].some.call(g.querySelectorAll('.it'),function(d){{return d.style.display!=='none'}})?'':'none'}})}}
-$('q').addEventListener('input',filt);
+var TAB='',ITS=[].slice.call(document.querySelectorAll('.it')),GRS=[].slice.call(document.querySelectorAll('.grp'));
+// пошук не розрізняє укр./рос. літери: і ї и ы → и, є е э ё → е, ґ → г; апострофи ігноруються
+function nz(s){{return s.toLowerCase().replace(/[ʼ’'`"«»ъ]/g,'').replace(/[іїиы]/g,'и').replace(/[єеэё]/g,'е').replace(/ґ/g,'г')}}
+ITS.forEach(function(d){{d._q=nz(d.dataset.q)}});
+// з текстом у пошуку шукаємо по всіх вкладках, без тексту — показуємо вибрану вкладку
+function filt(){{var raw=$('q').value.trim(),v=raw?nz(raw).split(/\s+/):[],n=0;
+ITS.forEach(function(d){{var ok=(v.length||!TAB||d.dataset.c===TAB)&&v.every(function(w){{return d._q.indexOf(w)>=0}});if(ok)n++;if(d.hidden===ok)d.hidden=!ok}});
+GRS.forEach(function(g){{var ok=!!g.querySelector('.it:not([hidden])');if(g.hidden===ok)g.hidden=!ok}});
+$('none').hidden=n>0}}
+var tm;$('q').addEventListener('input',function(){{clearTimeout(tm);tm=setTimeout(filt,200)}});
 $('tabs').addEventListener('click',function(ev){{var b=ev.target.closest('.tab');if(!b)return;TAB=b.dataset.t;
 [].forEach.call(this.children,function(x){{x.classList.toggle('on',x===b)}});try{{localStorage.setItem('etk-tab',TAB)}}catch(e){{}}filt()}});
 try{{var st=localStorage.getItem('etk-tab');if(st){{var bb=document.querySelector('.tab[data-t="'+st+'"]');if(bb)bb.click()}}}}catch(e){{}}
