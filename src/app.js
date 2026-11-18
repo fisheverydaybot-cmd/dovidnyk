@@ -205,18 +205,30 @@ function viewHome() {
 
 function viewSection(s) {
   var h = '<a class="back" href="#">← Усі розділи</a><h2>' + (ICONS[s.num] || '') + ' ' + esc(s.name) + '</h2>';
+  h += ttsBar('Прослухати весь розділ');
   h += '<ul class="qlist">' + s.qs.map(function (q) { return '<li><a href="#q-' + q.id + '">' + esc(q.title) + '</a></li>'; }).join('') + '</ul>';
   if (s.notes) h += '<div class="note">' + s.notes + '</div>';
   main.innerHTML = h;
+  var lis = main.querySelectorAll('.qlist li');
+  ttsAttach(main, function (list) {
+    add(list, 'Розділ: ' + s.name, null);
+    s.qs.forEach(function (q, k) {
+      var tmp = document.createElement('div'); tmp.innerHTML = q.html;
+      var part = []; add(part, 'Питання ' + (k + 1) + '. ' + q.title, null); collect(tmp, part);
+      part.forEach(function (c) { c.el = lis[k]; list.push(c); });
+    });
+  });
 }
 
 function viewQuestion(q) {
   var s = q.section, idx = s.qs.indexOf(q);
-  var h = '<a class="back" href="#' + s.id + '">← ' + esc(s.name) + '</a><article class="card"><h2>' + esc(q.title) + '</h2>' + q.html + '</article>';
+  var h = '<a class="back" href="#' + s.id + '">← ' + esc(s.name) + '</a><article class="card"><h2>' + esc(q.title) + '</h2>' + ttsBar('Прослухати') + q.html + '</article>';
   var others = s.qs.filter(function (x) { return x !== q; }).slice(0, 4);
   if (others.length) h += '<h3 class="more">Ще в цьому розділі</h3><ul class="qlist">' + others.map(function (x) { return '<li><a href="#q-' + x.id + '">' + esc(x.title) + '</a></li>'; }).join('') + '</ul>';
   h += '<div class="ask">Не знайшли відповіді? Зателефонуйте старшому продавцю або технологу.</div>';
   main.innerHTML = h;
+  var card = $('.card', main);
+  ttsAttach(card, function (list) { add(list, q.title, $('h2', card)); collect(card, list); });
   void idx;
 }
 
@@ -287,6 +299,7 @@ function printPoster() {
 }
 
 function viewSearch(term) {
+  ttsStop(); tts.box = null;
   var t = term.toLowerCase().trim();
   var words = t.split(/\s+/).filter(Boolean);
   var hits = ALLQ.map(function (q) {
@@ -408,8 +421,193 @@ function printForm(id) {
 function showModal(h) { var m = $('#modal'); $('#modal .box').innerHTML = h; m.hidden = false; }
 function hideModal() { $('#modal').hidden = true; }
 
+// ---------- Прослухати (озвучка браузером) ----------
+var TTS = window.speechSynthesis;
+var tts = { chunks: [], i: 0, on: false, paused: false, token: 0, rate: parseFloat(store('tts-rate')) || 1, box: null };
+var ABBR = { 'НАССР': 'ХАСП', 'ТТН': 'те-те-ен', 'ОПП': 'о-пе-пе', 'ППУ': 'пе-пе-у', 'ФОП': 'фоп', 'ТОВ': 'тов', 'ЄС': 'Євросоюз', 'ДСТУ': 'дсту', 'ГОСТ': 'гост', 'ВР': 'ве-ер', 'EFSA': 'ефса' };
+function plur(n, one, few, many) {
+  var x = Math.abs(parseInt(n, 10)) % 100, y = x % 10;
+  if (x > 10 && x < 20) return many;
+  return y === 1 ? one : (y >= 2 && y <= 4 ? few : many);
+}
+function degWord(n) {
+  var x = Math.abs(parseInt(n, 10)) % 100, y = x % 10;
+  if (/[.,]/.test(n)) return 'градуса';
+  if (x > 10 && x < 20) return 'градусів';
+  if (y === 1) return 'градус';
+  if (y >= 2 && y <= 4) return 'градуси';
+  return 'градусів';
+}
+function speakable(t) {
+  t = ' ' + t + ' ';
+  t = t.replace(/https?:\/\/\S+/g, ' ').replace(/(^|\s)(на\s)?[\w.-]+\.(gov\.ua|com\.ua|ua|eu|com|org)(?=[\s.,)]|$)/g, ' ').replace(/\s?·\s?/g, ', ');
+  t = t.replace(/\s?\/\s?(?=\d+\s?(год|хв|діб))/g, ' протягом ');
+  t = t.replace(/[\u{1F000}-\u{1FAFF}☀-➿️]/gu, ' ');
+  t = t.replace(/(^|[^\p{L}\d])([+−-]?\d+)\s?…\s?(?=[+−-]?\d)/gu, '$1від $2 до ');
+  t = t.replace(/([+−-])\s?(\d+)(?:\s?(?:…|–|—|\.\.\.)\s?([+−-]?)(\d+))?\s?°\s?C/g, function (m, s1, a, s2, b) {
+    var w = function (s) { return s === '+' ? 'плюс ' : (s ? 'мінус ' : ''); };
+    return b ? 'від ' + w(s1) + a + ' до ' + w(s2 || s1) + b + ' ' + degWord(b) : w(s1) + a + ' ' + degWord(a);
+  });
+  t = t.replace(/(\d+(?:[.,]\d+)?)\s?(?:–|—|-)\s?(\d+(?:[.,]\d+)?)\s?°\s?C/g, function (m, a, b) { return 'від ' + a + ' до ' + b + ' ' + degWord(b); });
+  t = t.replace(/(\d+(?:[.,]\d+)?)\s?°\s?C/g, function (m, a) { return a + ' ' + degWord(a); });
+  t = t.replace(/°\s?C/g, 'градусів');
+  t = t.replace(/−\s?(\d)/g, 'мінус $1').replace(/(^|[\s(])\+(\d)/g, '$1плюс $2');
+  t = t.replace(/(\d+)\s?(год|хв|кг)\.?(?!\p{L})/gu, function (m, n, u) {
+    return n + ' ' + (u === 'год' ? plur(n, 'година', 'години', 'годин') : u === 'хв' ? plur(n, 'хвилина', 'хвилини', 'хвилин') : plur(n, 'кілограм', 'кілограми', 'кілограмів'));
+  }).replace(/за кг/g, 'за кілограм');
+  t = t.replace(/(^|[^\d.,])(\d+)\s?–\s?(\d)/g, function (m, p, x, y) { return p + (/від\s$/.test(p) ? '' : 'від ') + x + ' до ' + y; });
+  t = t.replace(/eur-Lex,?/gi, '').replace(/при від/g, 'від');
+  t = t.replace(/(\d)\s?%/g, '$1 відсотків');
+  t = t.replace(/№\s?/g, 'номер ');
+  t = t.replace(/і\/або/g, 'або').replace(/(^|[\s(])ст\.\s/g, '$1стаття ').replace(/(\d)\s?р\.(\s)/g, '$1 року$2');
+  t = t.replace(/\s\/\s|(\p{L})\/(\p{L})/gu, function (m, a, b) { return a ? a + ' або ' + b : ' або '; });
+  t = t.replace(/(^|[^\p{L}])([A-ZА-ЯІЇЄҐ]{2,})(?=[^\p{L}]|$)/gu, function (m, p, w) {
+    if (ABBR[w]) return p + ABBR[w] + ' ';
+    return /^[IVX]+$/.test(w) ? p + w : p + w.toLowerCase();
+  });
+  t = t.replace(/(^|\s)[-•]\s/g, '$1').replace(/[«»"*_|]/g, ' ').replace(/\s—\s/g, ', ').replace(/\s+/g, ' ').replace(/ -(\d)/g, ' $1').replace(/\s+([.,!?:;)])/g, '$1').replace(/[,:]?\s[—–](?=[.]|$)/g, '').replace(/[:,;]\./g, '.').trim();
+  return t;
+}
+function splitText(t) {
+  var parts = [], out = [];
+  t.split(/(?<=[.!?])\s+/).forEach(function (p) {
+    if (parts.length && /^\d+\.$/.test(parts[parts.length - 1])) parts[parts.length - 1] += ' ' + p; else parts.push(p);
+  });
+  parts.forEach(function (p) {
+    p = p.trim(); if (!p) return;
+    while (p.length > 220) { var cut = p.lastIndexOf(',', 200); if (cut < 60) cut = p.lastIndexOf(' ', 200); if (cut < 60) cut = 200; out.push(p.slice(0, cut + 1)); p = p.slice(cut + 1).trim(); }
+    if (p) out.push(p);
+  });
+  return out;
+}
+// Збирає фрагменти тексту з блоків картки; el — що підсвічувати під час читання
+function collect(root, list) {
+  Array.prototype.forEach.call(root.children, function (el) {
+    var tag = el.tagName;
+    if (el.classList.contains('tts') || tag === 'H2') return;
+    if (tag === 'OL' || tag === 'UL') {
+      Array.prototype.forEach.call(el.children, function (li, k) { add(list, (tag === 'OL' ? (k + 1) + '. ' : '') + li.textContent, li); });
+    } else if (el.classList.contains('tw')) {
+      var heads = Array.prototype.map.call(el.querySelectorAll('thead th'), function (x) { return x.textContent.trim(); });
+      Array.prototype.forEach.call(el.querySelectorAll('tbody tr'), function (tr) {
+        var cs = Array.prototype.map.call(tr.children, function (td) { return td.textContent.trim(); });
+        var s = cs[0] + (cs[0] && !/[.:!?]$/.test(cs[0]) ? ':' : '') + ' ' + cs.slice(1).map(function (c, i) { return c && heads.length > 2 && heads[i + 1] ? heads[i + 1] + ' — ' + c : c; }).filter(Boolean).join('. ');
+        add(list, s, tr);
+      });
+    } else if (el.classList.contains('forms-row')) {
+      add(list, Array.prototype.map.call(el.children, function (x) { return x.textContent.trim(); }).join(', ').replace(/:,/g, ':').replace(/\s+/g, ' '), el);
+    } else add(list, el.textContent, el);
+  });
+}
+function add(list, text, el) {
+  var s = speakable(text); if (!s) return;
+  if (!/[.!?:;]$/.test(s)) s += '.';
+  splitText(s).forEach(function (c) { list.push({ t: c, el: el }); });
+}
+function ukVoices() { return TTS ? TTS.getVoices().filter(function (v) { return /^uk/i.test(v.lang); }) : []; }
+function pickVoice() {
+  var vs = ukVoices(), want = store('tts-voice');
+  return vs.filter(function (v) { return v.name === want; })[0] || vs.filter(function (v) { return /Google|Natural|Online|Polina|Lesya/i.test(v.name); })[0] || vs[0] || null;
+}
+function voicesReady(cb) {
+  if (!TTS) return cb();
+  if (TTS.getVoices().length) return cb();
+  var done = false, fin = function () { if (!done) { done = true; cb(); } };
+  try { TTS.addEventListener('voiceschanged', fin, { once: true }); } catch (e) { TTS.onvoiceschanged = fin; }
+  setTimeout(fin, 1200);
+}
+function ttsMsg(h) { var m = tts.box && $('.tts-msg', tts.box); if (m) { m.innerHTML = h || ''; m.hidden = !h; } }
+var NO_VOICE = 'На цьому телефоні немає українського голосу для читання. Як додати (один раз):<br>' +
+  '<b>Android:</b> Налаштування → Спеціальні можливості → Синтез мовлення (Text-to-speech) → Google → ⚙ → Встановити голосові дані → Українська.<br>' +
+  '<b>iPhone:</b> Параметри → Універсальний доступ → Усний вміст → Голоси → Українська.<br>Потім оновіть сторінку.';
+function ttsUI() {
+  if (!tts.box) return;
+  var play = $('.tts-play', tts.box), stop = $('.tts-stop', tts.box);
+  var paused = tts.paused;
+  play.textContent = tts.on ? '⏸ Пауза' : (paused ? '▶ Продовжити' : '🔊 ' + play.getAttribute('data-l'));
+  stop.hidden = !tts.on && !paused;
+  document.querySelectorAll('.tts-now').forEach(function (x) { x.classList.remove('tts-now'); });
+  var c = tts.chunks[tts.i];
+  if ((tts.on || paused) && c && c.el) c.el.classList.add('tts-now');
+}
+function ttsStop() {
+  tts.token++; tts.on = false; tts.paused = false; tts.i = 0;
+  if (TTS) try { TTS.cancel(); } catch (e) { /* ignore */ }
+  ttsUI();
+}
+function ttsNext() {
+  var my = ++tts.token;
+  if (tts.i >= tts.chunks.length) { tts.on = false; tts.paused = false; tts.i = 0; ttsUI(); return; }
+  var c = tts.chunks[tts.i];
+  ttsUI();
+  if (c.el && c.el.scrollIntoView) { var r = c.el.getBoundingClientRect(); if (r.top < 90 || r.bottom > innerHeight - 20) c.el.scrollIntoView({ block: 'center', behavior: 'smooth' }); }
+  var u = new SpeechSynthesisUtterance(c.t);
+  var v = pickVoice(); if (v) u.voice = v;
+  u.lang = v ? v.lang : 'uk-UA'; u.rate = tts.rate;
+  u.onend = function () { if (my !== tts.token || !tts.on) return; tts.i++; ttsNext(); };
+  u.onerror = function (e) {
+    if (my !== tts.token || !tts.on) return;
+    if (e && (e.error === 'interrupted' || e.error === 'canceled')) return;
+    tts.on = false; ttsUI();
+    ttsMsg(e && e.error === 'language-unavailable' ? NO_VOICE : 'Не вдалося увімкнути читання. Спробуйте ще раз або відкрийте довідник у Chrome / Safari.');
+  };
+  TTS.speak(u);
+}
+function ttsToggle() {
+  if (!TTS || !window.SpeechSynthesisUtterance) {
+    ttsMsg(inApp ? 'У Viber/Telegram читання вголос не працює. Натисніть ⋮ угорі → «Відкрити в браузері».' : 'Цей браузер не вміє читати вголос. Відкрийте довідник у Chrome (Android) або Safari (iPhone).');
+    return;
+  }
+  if (tts.on) { tts.token++; tts.on = false; tts.paused = true; try { TTS.cancel(); } catch (e) { /* ignore */ } ttsUI(); return; }
+  voicesReady(function () {
+    var all = TTS.getVoices();
+    if (all.length && !ukVoices().length) { ttsMsg(NO_VOICE); return; }
+    ttsMsg('');
+    try { TTS.cancel(); } catch (e) { /* ignore */ }
+    tts.on = true; tts.paused = false; ttsNext();
+  });
+}
+// Панель «Прослухати»: root — що читати, label — напис на кнопці
+function ttsBar(label) {
+  return '<div class="tts"><div class="tts-row"><button class="btn tts-play" data-l="' + esc(label) + '">🔊 ' + esc(label) + '</button>' +
+    '<button class="btn ghost tts-stop" hidden>⏹ Стоп</button>' +
+    '<button class="chip tts-rate" title="Швидкість">' + String(tts.rate).replace('.', ',') + '×</button></div>' +
+    '<p class="tts-msg warn" hidden></p></div>';
+}
+function ttsAttach(root, before) {
+  ttsStop();
+  tts.box = $('.tts', root);
+  tts.chunks = [];
+  before(tts.chunks);
+  tts.i = 0; ttsUI();
+  voiceSelect();
+}
+function voiceSelect() {
+  var vs = ukVoices();
+  if (tts.box && vs.length > 1 && !$('.tts-voice', tts.box)) {
+    var sel = document.createElement('select'); sel.className = 'tts-voice'; sel.title = 'Голос';
+    var cur = pickVoice();
+    sel.innerHTML = vs.map(function (v) { return '<option' + (cur && cur.name === v.name ? ' selected' : '') + '>' + esc(v.name.replace(/^Microsoft\s+|\s+Online.*$|\s*\(.*\)$/g, '')) + '</option>'; }).join('');
+    sel.onchange = function () { store('tts-voice', vs[sel.selectedIndex].name); };
+    $('.tts-row', tts.box).appendChild(sel);
+  }
+}
+document.addEventListener('click', function (e) {
+  if (!tts.box || !tts.box.contains(e.target)) return;
+  if (e.target.closest('.tts-play')) ttsToggle();
+  else if (e.target.closest('.tts-stop')) ttsStop();
+  else if (e.target.closest('.tts-rate')) {
+    var R = [1, 1.25, 1.5, 0.85]; tts.rate = R[(R.indexOf(tts.rate) + 1) % R.length]; store('tts-rate', tts.rate);
+    e.target.textContent = String(tts.rate).replace('.', ',') + '×';
+    if (tts.on) { tts.token++; try { TTS.cancel(); } catch (x) { /* ignore */ } ttsNext(); }
+  }
+});
+if (TTS) { try { TTS.getVoices(); TTS.addEventListener('voiceschanged', function () { voiceSelect(); }); } catch (e) { /* ignore */ } }
+window.addEventListener('pagehide', function () { ttsStop(); });
+
 // ---------- Маршрутизація ----------
 function route() {
+  ttsStop(); tts.box = null;
   var h = location.hash.replace(/^#/, '');
   window.scrollTo(0, 0);
   if (!h) return viewHome();
