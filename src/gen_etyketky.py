@@ -413,13 +413,13 @@ def site(sitedir, labels):
 <span class="tip" style="align-self:end">Рахується саме: дата і час пакування + 72 год. Якщо строк партії закінчується раніше — виправте вручну.</span>
 </div><label class="chk"><input id="vBlank" type="checkbox"> Друкувати без дати (порожні рядки, вписати ручкою)</label>
 <p class="tip">Дата, партія і маса друкуються прямо на етикетці. Перевірте їх перед друком — вони однакові для всіх етикеток, які друкуєте зараз.</p></div>
-<div class="how"><p><b>Як надрукувати:</b> заповніть дату (і партію), знайдіть товар і натисніть «🖨 Друкувати на Zebra». У вікні друку виберіть принтер
+<div class="how"><p><b>Як надрукувати:</b> заповніть дату (і партію), знайдіть товар і натисніть «🖨 Друкувати на Zebra». Етикетка відкриється великою на весь екран — перевірте назву, дату і партію і натисніть «🖨 Друкувати». У вікні друку виберіть принтер
 <b>ZDesigner…</b>, поля — «Немає», масштаб — <b>100 %</b>, і вкажіть кількість копій.
 Фасовка 200 г друкується на етикетці 56 × 51 мм — перед друком вставте в принтер цей рулон.</p>
 <p>«ZPL з датою» — файл з уже вписаною датою, для друку напряму через Zebra Setup Utilities («Send file»).</p></div>
 <div class="tabs" id="tabs">{''.join(tabs)}</div>
 <input id="q" type="search" placeholder="Пошук: оселедець, скумбрія, товстолоб…" autocomplete="off">
-<div id="list">{''.join(groups)}</div><p id="none" hidden>Нічого не знайдено. Спробуйте інше слово, наприклад лише назву риби.</p>
+<div id="list">{''.join(groups)}</div><div id="res" hidden></div><p id="none" hidden>Нічого не знайдено. Спробуйте інше слово, наприклад лише назву риби.</p>
 <p class="note" style="font-size:13px;color:#5b6873">Етикеток: {len(labels)}. Виробник — ТОВ «ФІШ-МАКСИМУМ ТРЕЙД»; морожена і сильносолена — ФОП Каменецький О. Л.; вкладка «Інші виробники» — етикетки постачальників без змін. Щоб змінити текст етикетки — напишіть, хто веде довідник (дані в src/etyketky.py).</p>
 </main><script>
 function $(i){{return document.getElementById(i)}}
@@ -444,6 +444,7 @@ var sz=fs;do{{x.font='bold '+sz+'px Arial, sans-serif';sz--}}while(x.measureText
 x.fillText(t,x1+4,y-1)}});
 var d=x.getImageData(0,0,W,H),a=d.data;for(var i=0;i<a.length;i+=4){{var v=(a[i]+a[i+1]+a[i+2])/3<150?0:255;a[i]=a[i+1]=a[i+2]=v;a[i+3]=255}}
 x.putImageData(d,0,0);return c}})}}
+function preview(c){{var o=$('pv');if(o)o.remove();o=document.createElement('div');o.id='pv';o.style.cssText='position:fixed;inset:0;z-index:99;background:rgba(0,0,0,.75);display:flex;flex-direction:column;align-items:center;justify-content:center;padding:12px;box-sizing:border-box';var im=new Image();im.src=c.toDataURL('image/png');im.alt='Етикетка';im.style.cssText='background:#fff;width:min(96vw,calc((100vh - 120px)*'+(c.width/c.height).toFixed(3)+'));height:auto;image-rendering:pixelated;box-shadow:0 4px 24px rgba(0,0,0,.5)';var bar=document.createElement('div');bar.style.cssText='display:flex;gap:16px;margin-top:16px';var bs='font-size:24px;font-weight:bold;padding:14px 28px;border:0;border-radius:10px;cursor:pointer';var p=document.createElement('button');p.textContent='🖨 Друкувати';p.style.cssText=bs+';background:#2e8b57;color:#fff';var x=document.createElement('button');x.textContent='✕ Скасувати';x.style.cssText=bs+';background:#eee;color:#222';function close(){{o.remove();document.removeEventListener('keydown',kd)}}function kd(e){{if(e.key==='Escape')close();if(e.key==='Enter'){{close();printCanvas(c)}}}}p.onclick=function(){{close();printCanvas(c)}};x.onclick=close;o.onclick=function(e){{if(e.target===o)close()}};document.addEventListener('keydown',kd);bar.appendChild(p);bar.appendChild(x);o.appendChild(im);o.appendChild(bar);document.body.appendChild(o);p.focus()}}
 function printCanvas(c){{var u=c.toDataURL('image/png'),mw=(c.width*25.4/203).toFixed(1)+'mm',mh=(c.height*25.4/203).toFixed(1)+'mm';var f=$('pf');if(f)f.remove();f=document.createElement('iframe');f.id='pf';
 f.style.cssText='position:fixed;width:0;height:0;border:0;right:0;bottom:0';document.body.appendChild(f);
 var d=f.contentWindow.document;d.open();d.write('<!DOCTYPE html><html><head><style>@page{{size:'+mw+' '+mh+';margin:0}}html,body{{margin:0;padding:0}}'+
@@ -453,16 +454,23 @@ function zpl(c,name){{var W=c.width,H=c.height,d=c.getContext('2d').getImageData
 for(r=0;r<H;r++){{for(b=0;b<bpr;b++){{v=0;for(k=0;k<8;k++){{xx=b*8+k;v=(v<<1)|(xx<W&&d[(r*W+xx)*4]<128?1:0)}}h+=(v<16?'0':'')+v.toString(16).toUpperCase()}}h+='\\n'}}
 var n=bpr*H,z='^XA\\n^PW'+W+'\\n^LL'+H+'\\n^LH0,0\\n^FO0,0^GFA,'+n+','+n+','+bpr+',\\n'+h+'^FS\\n^PQ1\\n^XZ\\n';
 var a=document.createElement('a');a.href=URL.createObjectURL(new Blob([z],{{type:'text/plain'}}));a.download=name+'.zpl';document.body.appendChild(a);a.click();a.remove()}}
-document.getElementById('list').addEventListener('click',function(ev){{var a=ev.target.closest('[data-act]');if(!a)return;ev.preventDefault();
+document.querySelector('main').addEventListener('click',function(ev){{var a=ev.target.closest('.it [data-act]');if(!a)return;ev.preventDefault();
 var it=a.closest('.it'),o=vals();if(!check(o))return;
-render(it,o).then(function(c){{if(a.dataset.act==='print')printCanvas(c);else zpl(c,it.dataset.s+(o.date?'-'+o.date:''))}})}});
+render(it,o).then(function(c){{if(a.dataset.act==='print')preview(c);else zpl(c,it.dataset.s+(o.date?'-'+o.date:''))}})}});
 var TAB='',ITS=[].slice.call(document.querySelectorAll('.it')),GRS=[].slice.call(document.querySelectorAll('.grp'));
 // пошук не розрізняє укр./рос. літери: і ї и ы → и, є е э ё → е, ґ → г; апострофи ігноруються
 function nz(s){{return s.toLowerCase().replace(/[ʼ’'`"«»ъ]/g,'').replace(/[іїиы]/g,'и').replace(/[єеэё]/g,'е').replace(/ґ/g,'г')}}
-ITS.forEach(function(d){{d._q=nz(d.dataset.q)}});
-// з текстом у пошуку шукаємо по всіх вкладках, без тексту — показуємо вибрану вкладку
-function filt(){{var raw=$('q').value.trim(),v=raw?nz(raw).split(/\s+/):[],n=0;
-ITS.forEach(function(d){{var ok=(v.length||!TAB||d.dataset.c===TAB)&&v.every(function(w){{return d._q.indexOf(w)>=0}});if(ok)n++;if(d.hidden===ok)d.hidden=!ok}});
+ITS.forEach(function(d){{d._q=nz(d.dataset.q);d._t=nz(d.querySelector('b').textContent);d._g=d.parentNode}});
+// слово з пошуку має збігатися з ПОЧАТКОМ слова в назві: «л» → лосось, лящ…, а не все, де є літера «л»
+function pre(q,w){{var i=q.indexOf(w);while(i>=0){{if(i===0||' («-/'.indexOf(q.charAt(i-1))>=0)return true;i=q.indexOf(w,i+1)}}return false}}
+var SR=false;
+// з текстом у пошуку шукаємо по всіх вкладках одним списком за алфавітом (спершу назви, що починаються з введеного); без тексту — вибрана вкладка
+function filt(){{var raw=$('q').value.trim(),v=raw?nz(raw).split(/\s+/):[],n=0,hit=[];
+if(!v.length&&SR){{ITS.forEach(function(d){{d._g.appendChild(d)}});SR=false}}
+ITS.forEach(function(d){{var ok=(v.length||!TAB||d.dataset.c===TAB)&&v.every(function(w){{return pre(d._q,w)}});if(ok){{n++;hit.push(d)}}if(d.hidden===ok)d.hidden=!ok}});
+if(v.length){{var f=v[0];hit.sort(function(a,b){{var x=a._t.indexOf(f)===0?0:1,y=b._t.indexOf(f)===0?0:1;return x-y||a._t.localeCompare(b._t,'uk')}});
+hit.forEach(function(d){{$('res').appendChild(d)}});SR=true}}
+$('list').hidden=!!v.length;$('res').hidden=!v.length;
 GRS.forEach(function(g){{var ok=!!g.querySelector('.it:not([hidden])');if(g.hidden===ok)g.hidden=!ok}});
 $('none').hidden=n>0}}
 var tm;$('q').addEventListener('input',function(){{clearTimeout(tm);tm=setTimeout(filt,200)}});
