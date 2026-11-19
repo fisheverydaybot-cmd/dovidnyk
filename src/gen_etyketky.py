@@ -224,27 +224,32 @@ def fit(l):
     raise SystemExit('не влазить: ' + l['file'])
 
 
-def render_png(ops):
-    im = Image.new('1', (W, H), 1)
+def render_png(ops, k=1):
+    """k=1 — 1:1 у точках принтера (чорно-біле, для друку); k>1 — чітка картинка для перегляду на екрані."""
+    # Малюємо зі згладжуванням і потім переводимо в чорно-біле: так усі слова стоять на одній лінії
+    # (у режимі '1' Pillow піднімав на 1 точку слова, що починаються з «б», напр. «білки»).
+    hd = k > 1
+    im = Image.new('L', (W * k, H * k), 255)
     dr = ImageDraw.Draw(im)
-    dr.fontmode = '1'
     for op in ops:
         if op[0] == 'text':
             _, x, y, s, segs = op
             for t, b in segs:
-                dr.text((x, y), t, font=font(s, b), fill=0, anchor='ls')
+                dr.text((x * k, y * k), t, font=font(s * k, b), fill=0, anchor='ls')
                 x += font(s, b).getlength(t)
         elif op[0] == 'rule':
             _, x1, x2, y = op
-            dr.line([(x1, y), (x2, y)], fill=0, width=1)
+            dr.line([(x1 * k, y * k), (x2 * k, y * k)], fill=0, width=k)
         elif op[0] == 'qr':
             _, x, y, mat = op
             x, y = round(x), round(y)
             for r, row in enumerate(mat):
                 for c, v in enumerate(row):
                     if v:
-                        dr.rectangle([x + c * QM, y + r * QM, x + c * QM + QM - 1, y + r * QM + QM - 1], fill=0)
-    return im
+                        dr.rectangle([(x + c * QM) * k, (y + r * QM) * k, (x + c * QM + QM) * k - 1, (y + r * QM + QM) * k - 1], fill=0)
+    if hd:
+        return im.quantize(4)
+    return im.point(lambda v: 0 if v < 128 else 255).convert('1', dither=Image.Dither.NONE)
 
 
 def zpl(im):
@@ -291,8 +296,11 @@ def draw_pdf(c, ops, ox=0, oy=0):
                         c.rect(ox + (x + cc * QM) * PT, Y(y + r * QM + QM), QM * PT, QM * PT, stroke=0, fill=1)
 
 
+HDK = 3  # збільшення картинки для перегляду на екрані
+
+
 def main(out):
-    for sub in ('pdf', 'zpl', 'png'):
+    for sub in ('pdf', 'zpl', 'png', 'png-hd'):
         os.makedirs(os.path.join(out, sub), exist_ok=True)
     allc = canvas.Canvas(os.path.join(out, 'vsi-etyketky.pdf'), pagesize=(W * PT, H * PT))
     allc.setTitle('Етикетки ТОВ «ФІШ-МАКСИМУМ ТРЕЙД»')
@@ -308,6 +316,7 @@ def main(out):
         name = l['file'].strip().replace('  ', ' ')
         im = render_png(ops)
         im.save(os.path.join(out, 'png', name + '.png'))
+        render_png(ops, HDK).save(os.path.join(out, 'png-hd', name + '.png'), optimize=True)
         open(os.path.join(out, 'zpl', name + '.zpl'), 'w', encoding='ascii').write(zpl(im))
         c = canvas.Canvas(os.path.join(out, 'pdf', name + '.pdf'), pagesize=(W * PT, H * PT))
         c.setTitle(name); draw_pdf(c, ops); c.showPage(); c.save()
@@ -377,13 +386,13 @@ def site(sitedir, labels):
     """Сторінка «Етикетки» в довіднику цеху: пошук, змінні дата/партія/маса, друк на Zebra, PDF, ZPL."""
     import json
     e = html.escape
-    for sub in ('pdf', 'zpl', 'png'):
+    for sub in ('pdf', 'zpl', 'png', 'png-hd'):
         os.makedirs(os.path.join(sitedir, sub), exist_ok=True)
     items = []
     for i, (l, src) in enumerate(labels):
         set_size(l)
         slug = f'{i + 1:02d}-{l["id"] or "inshi"}'
-        for sub, ext in (('pdf', 'pdf'), ('zpl', 'zpl'), ('png', 'png')):
+        for sub, ext in (('pdf', 'pdf'), ('zpl', 'zpl'), ('png', 'png'), ('png-hd', 'png')):
             shutil.copy(os.path.join(src, sub, l['_name'] + '.' + ext), os.path.join(sitedir, sub, slug + '.' + ext))
         title = ' '.join(l['title'])
         items.append((cat(l), f'<div class="it" data-c="{cat(l)}" data-q="{e(search_q(title))}" data-s="{slug}" data-w="{W}" data-h="{H}" data-f=\'{json.dumps(l["_slots"])}\'>'
@@ -436,15 +445,16 @@ if(v){{var p=v.split('-');o.date=p[2]+'.'+p[1]+'.'+p[0]}}
 var u=$('vUntil').value.trim();if(u)o.until=u;var b=$('vBatch').value.trim();if(b)o.batch=b;var m=$('vMass').value.trim().replace('.',',');if(m)o.mass=m;return o}}
 function check(o){{if($('vBlank').checked)return true;if(!o.date){{alert('Вкажіть дату виготовлення');$('vDate').focus();return false}}return true}}
 function loadImg(src){{return new Promise(function(ok,no){{var i=new Image();i.onload=function(){{ok(i)}};i.onerror=no;i.src=src}})}}
-function render(it,o){{return loadImg('png/'+it.dataset.s+'.png').then(function(im){{
+// hd=true — чітка картинка (у 3 рази більша) лише для перегляду на екрані; на принтер іде звичайна 1:1
+function render(it,o,hd){{var K=hd?3:1;return loadImg((hd?'png-hd/':'png/')+it.dataset.s+'.png').then(function(im){{
 var W=im.naturalWidth,H=im.naturalHeight;var c=document.createElement('canvas');c.width=W;c.height=H;var x=c.getContext('2d');x.drawImage(im,0,0);
 var f=JSON.parse(it.dataset.f);x.fillStyle='#000';x.textBaseline='alphabetic';
 Object.keys(o).forEach(function(k){{var s=f[k];if(!s)return;var x1=s[0],x2=s[1],y=s[2],fs=s[3]+2,t=o[k];
-var sz=fs;do{{x.font='bold '+sz+'px Arial, sans-serif';sz--}}while(x.measureText(t).width>x2-x1-6&&sz>10);
-x.fillText(t,x1+4,y-1)}});
-var d=x.getImageData(0,0,W,H),a=d.data;for(var i=0;i<a.length;i+=4){{var v=(a[i]+a[i+1]+a[i+2])/3<150?0:255;a[i]=a[i+1]=a[i+2]=v;a[i+3]=255}}
+x1*=K;x2*=K;y*=K;var sz=fs*K;do{{x.font='bold '+sz+'px Arial, sans-serif';sz--}}while(x.measureText(t).width>x2-x1-6*K&&sz>10*K);
+x.fillText(t,x1+4*K,y-K)}});
+if(hd)return c;var d=x.getImageData(0,0,W,H),a=d.data;for(var i=0;i<a.length;i+=4){{var v=(a[i]+a[i+1]+a[i+2])/3<150?0:255;a[i]=a[i+1]=a[i+2]=v;a[i+3]=255}}
 x.putImageData(d,0,0);return c}})}}
-function preview(c){{var o=$('pv');if(o)o.remove();o=document.createElement('div');o.id='pv';o.style.cssText='position:fixed;inset:0;z-index:99;background:rgba(0,0,0,.75);display:flex;flex-direction:column;align-items:center;justify-content:center;padding:12px;box-sizing:border-box';var im=new Image();im.src=c.toDataURL('image/png');im.alt='Етикетка';im.style.cssText='background:#fff;width:min(96vw,calc((100vh - 120px)*'+(c.width/c.height).toFixed(3)+'));height:auto;image-rendering:pixelated;box-shadow:0 4px 24px rgba(0,0,0,.5)';var bar=document.createElement('div');bar.style.cssText='display:flex;gap:16px;margin-top:16px';var bs='font-size:24px;font-weight:bold;padding:14px 28px;border:0;border-radius:10px;cursor:pointer';var p=document.createElement('button');p.textContent='🖨 Друкувати';p.style.cssText=bs+';background:#2e8b57;color:#fff';var x=document.createElement('button');x.textContent='✕ Скасувати';x.style.cssText=bs+';background:#eee;color:#222';function close(){{o.remove();document.removeEventListener('keydown',kd)}}function kd(e){{if(e.key==='Escape')close();if(e.key==='Enter'){{close();printCanvas(c)}}}}p.onclick=function(){{close();printCanvas(c)}};x.onclick=close;o.onclick=function(e){{if(e.target===o)close()}};document.addEventListener('keydown',kd);bar.appendChild(p);bar.appendChild(x);o.appendChild(im);o.appendChild(bar);document.body.appendChild(o);p.focus()}}
+function preview(h,c){{var o=$('pv');if(o)o.remove();o=document.createElement('div');o.id='pv';o.style.cssText='position:fixed;inset:0;z-index:99;background:rgba(0,0,0,.75);display:flex;flex-direction:column;align-items:center;justify-content:center;padding:12px;box-sizing:border-box';var im=new Image();im.src=h.toDataURL('image/png');im.alt='Етикетка';im.style.cssText='background:#fff;width:min(70vw,calc(70vh*'+(h.width/h.height).toFixed(3)+'));height:auto;box-shadow:0 4px 24px rgba(0,0,0,.5)';var bar=document.createElement('div');bar.style.cssText='display:flex;gap:16px;margin-top:16px';var bs='font-size:24px;font-weight:bold;padding:14px 28px;border:0;border-radius:10px;cursor:pointer';var p=document.createElement('button');p.textContent='🖨 Друкувати';p.style.cssText=bs+';background:#2e8b57;color:#fff';var x=document.createElement('button');x.textContent='✕ Скасувати';x.style.cssText=bs+';background:#eee;color:#222';function close(){{o.remove();document.removeEventListener('keydown',kd)}}function kd(e){{if(e.key==='Escape')close();if(e.key==='Enter'){{close();printCanvas(c)}}}}p.onclick=function(){{close();printCanvas(c)}};x.onclick=close;o.onclick=function(e){{if(e.target===o)close()}};document.addEventListener('keydown',kd);bar.appendChild(p);bar.appendChild(x);o.appendChild(im);o.appendChild(bar);document.body.appendChild(o);p.focus()}}
 function printCanvas(c){{var u=c.toDataURL('image/png'),mw=(c.width*25.4/203).toFixed(1)+'mm',mh=(c.height*25.4/203).toFixed(1)+'mm';var f=$('pf');if(f)f.remove();f=document.createElement('iframe');f.id='pf';
 f.style.cssText='position:fixed;width:0;height:0;border:0;right:0;bottom:0';document.body.appendChild(f);
 var d=f.contentWindow.document;d.open();d.write('<!DOCTYPE html><html><head><style>@page{{size:'+mw+' '+mh+';margin:0}}html,body{{margin:0;padding:0}}'+
@@ -456,7 +466,7 @@ var n=bpr*H,z='^XA\\n^PW'+W+'\\n^LL'+H+'\\n^LH0,0\\n^FO0,0^GFA,'+n+','+n+','+bpr
 var a=document.createElement('a');a.href=URL.createObjectURL(new Blob([z],{{type:'text/plain'}}));a.download=name+'.zpl';document.body.appendChild(a);a.click();a.remove()}}
 document.querySelector('main').addEventListener('click',function(ev){{var a=ev.target.closest('.it [data-act]');if(!a)return;ev.preventDefault();
 var it=a.closest('.it'),o=vals();if(!check(o))return;
-render(it,o).then(function(c){{if(a.dataset.act==='print')preview(c);else zpl(c,it.dataset.s+(o.date?'-'+o.date:''))}})}});
+render(it,o).then(function(c){{if(a.dataset.act!=='print')return zpl(c,it.dataset.s+(o.date?'-'+o.date:''));render(it,o,true).then(function(h){{preview(h,c)}},function(){{preview(c,c)}})}})}});
 var TAB='',ITS=[].slice.call(document.querySelectorAll('.it')),GRS=[].slice.call(document.querySelectorAll('.grp'));
 // пошук не розрізняє укр./рос. літери: і ї и ы → и, є е э ё → е, ґ → г; апострофи ігноруються
 function nz(s){{return s.toLowerCase().replace(/[ʼ’'`"«»ъ]/g,'').replace(/[іїиы]/g,'и').replace(/[єеэё]/g,'е').replace(/ґ/g,'г')}}
