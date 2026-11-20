@@ -422,7 +422,7 @@ def site(sitedir, labels):
 <span class="tip" style="align-self:end">Рахується саме: дата і час пакування + 72 год. Якщо строк партії закінчується раніше — виправте вручну.</span>
 </div><label class="chk"><input id="vBlank" type="checkbox"> Друкувати без дати (порожні рядки, вписати ручкою)</label>
 <p class="tip">Дата, партія і маса друкуються прямо на етикетці. Перевірте їх перед друком — вони однакові для всіх етикеток, які друкуєте зараз.</p></div>
-<div class="how"><p><b>Як надрукувати:</b> заповніть дату (і партію), знайдіть товар і натисніть «🖨 Друкувати на Zebra». Етикетка відкриється великою на весь екран — перевірте назву, дату і партію і натисніть «🖨 Друкувати». У вікні друку виберіть принтер
+<div class="how"><p><b>Як надрукувати:</b> заповніть дату (і партію), знайдіть товар і натисніть «🖨 Друкувати на Zebra». У вікні друку виберіть принтер
 <b>ZDesigner…</b>, поля — «Немає», масштаб — <b>100 %</b>, і вкажіть кількість копій.
 Фасовка 200 г друкується на етикетці 56 × 51 мм — перед друком вставте в принтер цей рулон.</p>
 <p>«ZPL з датою» — файл з уже вписаною датою, для друку напряму через Zebra Setup Utilities («Send file»).</p></div>
@@ -466,7 +466,7 @@ var n=bpr*H,z='^XA\\n^PW'+W+'\\n^LL'+H+'\\n^LH0,0\\n^FO0,0^GFA,'+n+','+n+','+bpr
 var a=document.createElement('a');a.href=URL.createObjectURL(new Blob([z],{{type:'text/plain'}}));a.download=name+'.zpl';document.body.appendChild(a);a.click();a.remove()}}
 document.querySelector('main').addEventListener('click',function(ev){{var a=ev.target.closest('.it [data-act]');if(!a)return;ev.preventDefault();
 var it=a.closest('.it'),o=vals();if(!check(o))return;
-render(it,o).then(function(c){{if(a.dataset.act!=='print')return zpl(c,it.dataset.s+(o.date?'-'+o.date:''));render(it,o,true).then(function(h){{preview(h,c)}},function(){{preview(c,c)}})}})}});
+render(it,o).then(function(c){{if(a.dataset.act==='print')printCanvas(c);else zpl(c,it.dataset.s+(o.date?'-'+o.date:''))}})}});
 var TAB='',ITS=[].slice.call(document.querySelectorAll('.it')),GRS=[].slice.call(document.querySelectorAll('.grp'));
 // пошук не розрізняє укр./рос. літери: і ї и ы → и, є е э ё → е, ґ → г; апострофи ігноруються
 function nz(s){{return s.toLowerCase().replace(/[ʼ’'`"«»ъ]/g,'').replace(/[іїиы]/g,'и').replace(/[єеэё]/g,'е').replace(/ґ/g,'г')}}
@@ -474,10 +474,10 @@ ITS.forEach(function(d){{d._q=nz(d.dataset.q);d._t=nz(d.querySelector('b').textC
 // слово з пошуку має збігатися з ПОЧАТКОМ слова в назві: «л» → лосось, лящ…, а не все, де є літера «л»
 function pre(q,w){{var i=q.indexOf(w);while(i>=0){{if(i===0||' («-/'.indexOf(q.charAt(i-1))>=0)return true;i=q.indexOf(w,i+1)}}return false}}
 var SR=false;
-// з текстом у пошуку шукаємо по всіх вкладках одним списком за алфавітом (спершу назви, що починаються з введеного); без тексту — вибрана вкладка
+// у вкладці «Усі» шукаємо по всіх товарах, в інших вкладках — лише в цій групі; результат одним списком за алфавітом (спершу назви, що починаються з введеного); без тексту — вибрана вкладка
 function filt(){{var raw=$('q').value.trim(),v=raw?nz(raw).split(/\s+/):[],n=0,hit=[];
 if(!v.length&&SR){{ITS.forEach(function(d){{d._g.appendChild(d)}});SR=false}}
-ITS.forEach(function(d){{var ok=(v.length||!TAB||d.dataset.c===TAB)&&v.every(function(w){{return pre(d._q,w)}});if(ok){{n++;hit.push(d)}}if(d.hidden===ok)d.hidden=!ok}});
+ITS.forEach(function(d){{var ok=(!TAB||d.dataset.c===TAB)&&v.every(function(w){{return pre(d._q,w)}});if(ok){{n++;hit.push(d)}}if(d.hidden===ok)d.hidden=!ok}});
 if(v.length){{var f=v[0];hit.sort(function(a,b){{var x=a._t.indexOf(f)===0?0:1,y=b._t.indexOf(f)===0?0:1;return x-y||a._t.localeCompare(b._t,'uk')}});
 hit.forEach(function(d){{$('res').appendChild(d)}});SR=true}}
 $('list').hidden=!!v.length;$('res').hidden=!v.length;
